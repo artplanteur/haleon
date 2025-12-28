@@ -1,0 +1,34 @@
+*.py[cod]
+__pycache__/
+
+# Reflex / build
+.web
+.states
+dist/
+build/
+
+# Python env
+.venv/
+venv/
+.env
+.env.*
+
+# Node
+node_modules/
+
+# Local data / DB
+*.db
+data/
+haleon_data/
+
+# IDE / tooling
+.cursor/
+.vscode/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Already present rule
+assets/external/

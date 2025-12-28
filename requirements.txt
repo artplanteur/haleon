@@ -1,0 +1,7 @@
+reflex==0.8.23
+sqlmodel
+sqlalchemy
+dill>=0.3.8
+python-dotenv
+pytz
+pandas

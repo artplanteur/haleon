@@ -1,0 +1,467 @@
+/* Theme CSS pour haleon - Design moderne et professionnel */
+
+:root {
+    /* Couleurs principales */
+    --primary-color: #3b82f6;
+    --primary-hover: #2563eb;
+    --primary-light: #dbeafe;
+    --secondary-color: #64748b;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --error-color: #ef4444;
+    
+    /* Couleurs de fond */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --bg-tertiary: #f1f5f9;
+    --bg-sidebar: #ffffff;
+    --bg-header: #ffffff;
+    
+    /* Couleurs de texte */
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-tertiary: #94a3b8;
+    
+    /* Bordures */
+    --border-color: #e2e8f0;
+    --border-radius: 12px;
+    --border-radius-sm: 8px;
+    
+    /* Ombres */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.05);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04);
+    
+    /* Transitions */
+    --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-normal: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 500ms cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* Espacements */
+    --spacing-xs: 0.5rem;
+    --spacing-sm: 1rem;
+    --spacing-md: 1.5rem;
+    --spacing-lg: 2rem;
+    --spacing-xl: 3rem;
+}
+
+[data-theme="dark"] {
+    /* Couleurs de fond */
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    
+    /* Couleurs de texte */
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-tertiary: #94a3b8;
+    
+    /* Bordures */
+    --border-color: #334155;
+}
+
+/* Styles globaux */
+* {
+    transition: background-color var(--transition-fast), 
+                color var(--transition-fast),
+                border-color var(--transition-fast);
+}
+
+body {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Application du thème aux composants Reflex */
+[data-theme="dark"] .header-container,
+[data-theme="dark"] .sidebar-container {
+    background-color: var(--bg-primary);
+    border-color: var(--border-color);
+    padding: 1.25rem 2.5rem !important; /* S'assurer que le padding est aussi appliqué en mode dark */
+}
+
+[data-theme="dark"] .header-logo {
+    background-image: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+}
+
+[data-theme="dark"] .sidebar-item:hover {
+    background-color: rgba(59, 130, 246, 0.2);
+    color: #60a5fa;
+}
+
+[data-theme="dark"] .sidebar-item.admin:hover {
+    background-color: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+/* Layout principal */
+.main-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.content-wrapper {
+    display: flex;
+    flex: 1;
+    width: 100%;
+}
+
+.main-content {
+    background-color: var(--bg-secondary);
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn var(--transition-normal);
+}
+
+/* Avatar styles */
+.avatar-container {
+    cursor: pointer;
+    transition: transform var(--transition-fast);
+}
+
+.avatar-container:hover {
+    transform: scale(1.05);
+}
+
+/* Popup styles - Net et professionnel */
+.popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 9999;
+    animation: fadeIn var(--transition-fast);
+    /* Pas de blur pour éviter le flou */
+}
+
+.popup-content {
+    background-color: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    padding: 28px;
+    width: 480px;
+    max-width: 90vw;
+    animation: slideInPopup 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Amélioration de la netteté */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    transform: translate(-50%, -50%);
+    will-change: transform;
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .popup-content {
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+    background-color: var(--bg-primary);
+    border-color: var(--border-color);
+}
+
+@keyframes slideInPopup {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -48%) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+/* Amélioration de la netteté du texte dans le popup */
+.popup-content * {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Popup overview - table core (data_table) */
+.core-table-scroll {
+    /* la boîte gère les scrollbars */
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Forcer le tableau à occuper l'espace disponible du popup */
+.core-table-datatable {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    display: block;
+}
+
+.core-table-datatable * {
+    box-sizing: border-box;
+}
+
+/* Certains wrappers internes de data_table peuvent shrink-to-fit : on force à 100% */
+.core-table-scroll > * {
+    width: 100% !important;
+    min-width: 100% !important;
+}
+
+.core-table-datatable table {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+    table-layout: fixed;
+}
+
+/* Réduire l'explosion des colonnes : */
+/* - header peut wrap (lisible) */
+/* - cells: ellipsis pour éviter des colonnes gigantesques */
+.core-table-datatable th {
+    white-space: normal;
+    word-break: break-word;
+    line-height: 1.2;
+}
+
+.core-table-datatable td {
+    max-width: 260px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Session countdown */
+.session-countdown {
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+/* Timer de session adaptatif */
+#session-timer-display {
+    transition: color var(--transition-fast);
+}
+
+[data-theme="dark"] #session-timer-display {
+    color: #60a5fa !important;
+}
+
+/* Header amélioré */
+.header-container {
+    backdrop-filter: blur(10px);
+    background-color: var(--bg-header);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    padding: 1.25rem 2.5rem !important; /* Padding pour éviter que le contenu colle aux bords (haut/bas: 1.25rem, gauche/droite: 2.5rem) */
+    box-sizing: border-box;
+    min-height: 64px; /* Hauteur minimale pour un meilleur espacement */
+}
+
+.header-content {
+    background-color: var(--bg-header);
+}
+
+.header-logo {
+    background-image: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    background-clip: text;
+    color: transparent;
+    -webkit-background-clip: text;
+}
+
+.header-btn:hover {
+    background-color: var(--bg-tertiary);
+}
+
+.nav-link:hover {
+    background-color: var(--primary-light);
+}
+
+.login-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+/* Sidebar améliorée */
+.sidebar-container {
+    background-color: var(--bg-sidebar);
+    border-right: 1px solid var(--border-color);
+    box-shadow: var(--shadow-lg);
+}
+
+.sidebar-section-title {
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.sidebar-section-title.admin {
+    color: var(--error-color);
+}
+
+.sidebar-item {
+    transition: all var(--transition-fast);
+    border-radius: var(--border-radius-sm);
+    padding: 0.5rem 0.75rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.sidebar-item:hover {
+    background-color: var(--primary-light);
+    color: var(--primary-color);
+    transform: translateX(4px);
+}
+
+.sidebar-item.admin {
+    color: var(--text-secondary);
+}
+
+.sidebar-item.admin:hover {
+    background-color: rgba(239, 68, 68, 0.1);
+    color: var(--error-color);
+}
+
+/* Cards modernes */
+.modern-card {
+    background: var(--bg-primary);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-md);
+    transition: all var(--transition-normal);
+    border: 1px solid var(--border-color);
+}
+
+.modern-card:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+}
+
+/* Boutons améliorés */
+.btn-modern {
+    transition: all var(--transition-fast);
+    border-radius: var(--border-radius-sm);
+    font-weight: 500;
+}
+
+.btn-modern:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+/* Avatar amélioré */
+.avatar-modern {
+    transition: all var(--transition-fast);
+    box-shadow: var(--shadow-sm);
+}
+
+.avatar-modern:hover {
+    transform: scale(1.1);
+    box-shadow: var(--shadow-md);
+}
+
+/* Popup modal amélioré */
+.popup-backdrop {
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.popup-content-wrapper {
+    animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -48%) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+/* Amélioration des espacements */
+.content-container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+/* Cards avec meilleur design */
+.app-card {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid var(--border-color);
+}
+
+.app-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-xl);
+    border-color: var(--primary-color);
+}
+
+/* Drawer sidebar styles - Style solide et professionnel */
+.drawer-overlay {
+    background-color: rgba(0, 0, 0, 0.5) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+}
+
+.drawer-sidebar {
+    background-color: var(--bg-sidebar) !important;
+    border-right: 1px solid var(--border-color) !important;
+    box-shadow: var(--shadow-xl) !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+[data-theme="dark"] .drawer-sidebar {
+    background-color: var(--bg-primary) !important;
+    border-right-color: var(--border-color) !important;
+}
+
+/* Animation pour le drawer */
+@keyframes slideInLeft {
+    from {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.drawer-sidebar {
+    animation: slideInLeft var(--transition-normal) ease-out;
+}
+
+/* Barre de recherche et action (style standardisé pour les pages admin) */
+.admin-search-action-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    justify-content: flex-start;
+}
+
+.admin-search-action-bar input {
+    width: 300px;
+}
+
+.admin-search-action-bar button {
+    flex-shrink: 0;
+}
+
