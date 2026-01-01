@@ -58,6 +58,16 @@ def init_db():
     # Créer toutes les tables (core + applications avec préfixe app_{appCode}_)
     SQLModel.metadata.create_all(engine)
     
+    # Migrations SQLite légères (idempotentes).
+    # IMPORTANT: à exécuter avant la (re)création des triggers d'audit.
+    try:
+        from haleon.db.migrate_users_auth_timestamps import migrate_users_auth_timestamps
+        with Session(engine) as session:
+            migrate_users_auth_timestamps(session, DB_PATH)
+    except Exception as e:
+        # Ne pas bloquer le démarrage en dev si une migration échoue.
+        print(f"Warning: users auth timestamps migration failed: {e}")
+    
     # Créer les triggers d'audit pour toutes les tables
     # Utiliser recreate_audit_triggers pour s'assurer que tous les triggers sont à jour
     from haleon.db.triggers import recreate_audit_triggers

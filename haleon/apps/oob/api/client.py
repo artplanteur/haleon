@@ -1,30 +1,111 @@
-"""Client API simulé pour l'application OOB."""
+"""API client for the OOB app (real API + simulation fallback).
+
+This module keeps the existing public contract used by OOBState:
+- fetch_purchasing_items(...) -> List[PurchasingItem]
+- authenticate() -> bool
+"""
+
+from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, List, Optional
 from datetime import datetime, timedelta
+
+import requests
+from requests.auth import HTTPBasicAuth
 from dotenv import load_dotenv
+
 from haleon.apps.oob.schemas.pydantic import PurchasingItem, IBPPurgDocItem
 
-# Charger les variables d'environnement depuis apps/.env
-apps_dir = Path(__file__).parent.parent
-env_file = apps_dir / ".env"
-if env_file.exists():
-    load_dotenv(env_file)
 
-# Récupérer les credentials
-API_LOGIN = os.getenv("API_LOGIN")
+# -------------------------
+# ENV loading
+# -------------------------
+# Existing behavior: apps/.env
+apps_dir = Path(__file__).parent.parent
+apps_env_file = apps_dir / ".env"
+if apps_env_file.exists():
+    load_dotenv(apps_env_file)
+
+# Your temp_api.py behavior: ./config/.env (optional)
+config_env_file = Path("config") / ".env"
+if config_env_file.exists():
+    load_dotenv(config_env_file)
+
+
+# -------------------------
+# Real API configuration
+# -------------------------
+BASE_URL = os.getenv("BASE_URL", "")
+PURCHASING_ENDPOINT = os.getenv("PURCHASING_ENDPOINT", "")
+
+# Support both naming conventions.
+API_USER = os.getenv("API_USER") or os.getenv("API_LOGIN")
 API_PASSWORD = os.getenv("API_PASSWORD")
 
+# SSL verification control
+# NOTE (per your request): verify MUST be False.
+# If you ever need to re-enable, set API_VERIFY_SSL=true and change the default below.
+API_VERIFY_SSL: bool = os.getenv("API_VERIFY_SSL", "false").strip().lower() in ("true", "1", "yes")
 
-def _api_credentials_configured() -> bool:
-    """Retourne True si les credentials API sont configurés via l'environnement."""
-    return bool(API_LOGIN and API_PASSWORD)
+# Resource name can vary depending on your OData service.
+PURCHASING_ITEMS_RESOURCE = os.getenv("PURCHASING_ITEMS_RESOURCE", "IBPPurgReceiptElmnt")
 
 
+def _real_api_configured() -> bool:
+    return bool(BASE_URL and PURCHASING_ENDPOINT and API_USER and API_PASSWORD)
+
+
+# -------------------------
+# Real API client (from temp_api.py)
+# -------------------------
+class APS_API_Client:
+    def __init__(self):
+        self.base_url = BASE_URL
+        self.user = API_USER
+        self.password = API_PASSWORD
+        self.auth = HTTPBasicAuth(self.user, self.password) if self.user and self.password else None
+
+    def fetch(self, endpoint: str, headers=None, params=None, page_size: int = 5000) -> List[dict]:
+        full_url = f"{self.base_url}{endpoint}"
+        query_params = params.copy() if params else {}
+        query_params.update({"$top": page_size, "$count": "true"})
+
+        all_data: List[dict] = []
+        skip = 0
+
+        while True:
+            query_params["$skip"] = skip
+            response = requests.get(
+                full_url,
+                headers=headers,
+                params=query_params,
+                auth=self.auth,
+                verify=API_VERIFY_SSL,  # requested: False
+                timeout=60,
+            )
+            response.raise_for_status()
+            data = response.json()
+            items = data.get("value", []) if isinstance(data, dict) else []
+            all_data.extend(items)
+            if len(items) < page_size:
+                break
+            skip += page_size
+
+        return all_data
+
+
+class Purchasing(APS_API_Client):
+    def __init__(self):
+        super().__init__()
+        self.base_url = f"{self.base_url}{PURCHASING_ENDPOINT}"
+
+
+# -------------------------
+# Simulation fallback (kept)
+# -------------------------
 def _get_document_types() -> List[dict]:
-    """Retourne la liste des types de documents disponibles."""
     return [
         {"code": "PO_ITM", "description": "Purchase Order Item"},
         {"code": "STO_ITM", "description": "Stock Transfer Order"},
@@ -40,27 +121,21 @@ def _get_document_types() -> List[dict]:
     ]
 
 
-def _generate_fake_purchasing_items(count: int = 50, vendor_codes: Optional[List[str]] = None) -> List[PurchasingItem]:
-    """Génère des données fictives de PurchasingItem pour la simulation.
-    
-    Args:
-        count: Nombre d'items à générer
-        vendor_codes: Liste des codes de vendors à utiliser pour ShipFromLocationID. Si None, utilise des codes génériques.
-    """
-    items = []
+def _generate_fake_purchasing_items(
+    count: int = 50, vendor_codes: Optional[List[str]] = None
+) -> List[PurchasingItem]:
+    items: List[PurchasingItem] = []
     doc_type_list = _get_document_types()
-    
-    # Si aucun vendor code fourni, utiliser des codes génériques
+
     if not vendor_codes:
         vendor_codes = ["ACME", "TECH", "GLOB", "EURO", "ASIA"]
-    
+
     base_date = datetime.now()
-    
+
     for i in range(count):
-        # Générer un IBPPurgDocItem
         doc_type = doc_type_list[i % len(doc_type_list)]
         doc_ext = f"PO{i+1000:06d}"
-        
+
         doc_item = IBPPurgDocItem(
             IBPPurgDocInt=i + 1,
             SimulationVersionID=1,
@@ -80,13 +155,12 @@ def _generate_fake_purchasing_items(count: int = 50, vendor_codes: Optional[List
             VersionID="V1",
             SourceLogicalSystem="SAP",
         )
-        
-        # Générer un PurchasingItem
+
         receipt_date = base_date + timedelta(days=i % 30)
         delivery_date = receipt_date + timedelta(days=7 + (i % 14))
         requirement_date = receipt_date - timedelta(days=2 + (i % 5))
         expiry_date = delivery_date + timedelta(days=30 + (i % 60))
-        
+
         purchasing_item = PurchasingItem(
             IBPPurgReceiptElmntInt=i + 1,
             SimulationVersionID=1,
@@ -104,16 +178,19 @@ def _generate_fake_purchasing_items(count: int = 50, vendor_codes: Optional[List
             ProductBaseUnit="PC",
             IBPReceiptIsPlngRlvt=(i % 2 == 0),
             IBPRequirementIsPlngRlvt=(i % 3 == 0),
-            IBPMinRmngShelfLifeInSeconds=86400 * (7 + (i % 30)),  # 7-37 jours
+            IBPMinRmngShelfLifeInSeconds=86400 * (7 + (i % 30)),
             IBPExpiryDateTime=expiry_date,
             IBPPurgDocItem=doc_item,
         )
-        
+
         items.append(purchasing_item)
-    
+
     return items
 
 
+# -------------------------
+# Public API used by OOBState
+# -------------------------
 def fetch_purchasing_items(
     date_min: Optional[datetime] = None,
     date_max: Optional[datetime] = None,
@@ -122,69 +199,52 @@ def fetch_purchasing_items(
     doc_types: Optional[List[str]] = None,
     vendor_codes: Optional[List[str]] = None,
 ) -> List[PurchasingItem]:
-    """Simule un appel API pour récupérer les PurchasingItem.
-    
-    Args:
-        date_min: Date minimale pour filtrer
-        date_max: Date maximale pour filtrer
-        ship_from: Filtrer par ShipFromLocationID
-        ship_to: Filtrer par ShipToLocationID
-        doc_types: Liste des types de documents à inclure
-    
-    Returns:
-        Liste de PurchasingItem correspondant aux critères
-    """
-    # Vérifier les credentials (simulation)
-    # On ne doit jamais fallback sur des credentials par défaut.
-    if not _api_credentials_configured():
-        print("Warning: API_LOGIN/API_PASSWORD not set. Using simulated data only (apps/.env).")
-    
-    # Générer des données fictives
-    all_items = _generate_fake_purchasing_items(50, vendor_codes=vendor_codes)
-    
-    # Appliquer les filtres
-    filtered_items = all_items
-    
-    if date_min:
-        filtered_items = [
-            item for item in filtered_items
-            if item.IBPPurgReceiptDateTime >= date_min
-        ]
-    
-    if date_max:
-        filtered_items = [
-            item for item in filtered_items
-            if item.IBPPurgReceiptDateTime <= date_max
-        ]
-    
-    if ship_from:
-        filtered_items = [
-            item for item in filtered_items
-            if item.ShipFromLocationID and ship_from.upper() in item.ShipFromLocationID.upper()
-        ]
-    
-    if ship_to:
-        filtered_items = [
-            item for item in filtered_items
-            if ship_to.upper() in item.ShipToLocationID.upper()
-        ]
-    
-    if doc_types:
-        filtered_items = [
-            item for item in filtered_items
-            if item.IBPPurgDocItem.IBPPurgDocType in doc_types
-        ]
-    
-    return filtered_items
+    """Fetch PurchasingItem list from the real API; fallback to simulated data."""
+    if _real_api_configured():
+        try:
+            api = Purchasing()
+
+            # Try to load nested doc item in a single call if supported by the service.
+            params: dict[str, Any] = {"$expand": "IBPPurgDocItem"}
+            raw = api.fetch(PURCHASING_ITEMS_RESOURCE, params=params, page_size=5000)
+
+            parsed: List[PurchasingItem] = []
+            for obj in raw:
+                # Pydantic v2
+                if hasattr(PurchasingItem, "model_validate"):
+                    parsed.append(PurchasingItem.model_validate(obj))
+                else:
+                    parsed.append(PurchasingItem(**obj))
+
+            # Client-side filters (kept consistent with previous behavior)
+            items = parsed
+            if date_min:
+                items = [it for it in items if it.IBPPurgReceiptDateTime >= date_min]
+            if date_max:
+                items = [it for it in items if it.IBPPurgReceiptDateTime <= date_max]
+            if ship_from:
+                items = [
+                    it
+                    for it in items
+                    if it.ShipFromLocationID and ship_from.upper() in it.ShipFromLocationID.upper()
+                ]
+            if ship_to:
+                items = [it for it in items if ship_to.upper() in it.ShipToLocationID.upper()]
+            if doc_types:
+                items = [it for it in items if it.IBPPurgDocItem.IBPPurgDocType in doc_types]
+            if vendor_codes:
+                items = [it for it in items if it.ShipFromLocationID and it.ShipFromLocationID in vendor_codes]
+
+            return items
+        except Exception as e:
+            print(f"Warning: real API fetch failed ({e}). Falling back to simulated data.")
+
+    return _generate_fake_purchasing_items(50, vendor_codes=vendor_codes)
 
 
 def authenticate() -> bool:
-    """Simule l'authentification API.
-    
-    Returns:
-        True si les credentials sont valides
-    """
-    return _api_credentials_configured()
+    """Return True if real API settings are present."""
+    return _real_api_configured()
 
 
 

@@ -37,6 +37,7 @@ def create_user(
     first_name: Optional[str] = None,
     country: Optional[str] = None,
     session_id: Optional[str] = None,
+    is_connected: bool = False,
     is_admin: bool = False,
     audit_user: Optional[Users] = None,
     audit_source: Optional[str] = None,
@@ -50,10 +51,12 @@ def create_user(
         first_name: Prénom
         country: Pays
         session_id: ID de session
+        is_connected: Statut de connexion initial (par défaut: False)
         is_admin: Si l'utilisateur est admin
         audit_user: Utilisateur effectuant l'opération (pour l'audit)
         audit_source: Source de l'opération (ex: "admin/users", "seed")
     """
+    now = datetime.now()
     with AuditLogger.with_context(session, audit_user, audit_source):
         user = Users(
             email=email,
@@ -61,11 +64,15 @@ def create_user(
             first_name=first_name,
             country=country,
             session_id=session_id,
-            is_connected=True,
+            is_connected=is_connected,
             is_validated=False,  # Par défaut, nouvel utilisateur non validé
             is_active=True,
             is_admin=is_admin,
-            last_connection=datetime.now(),
+            # Legacy: retained for older code/DBs, but auth now uses last_login_at/last_seen_at.
+            last_connection=now if is_connected else None,
+            last_login_at=now if is_connected else None,
+            last_seen_at=now if is_connected else None,
+            updated_at=now,
         )
         session.add(user)
         session.commit()
@@ -97,6 +104,7 @@ def update_user(
         audit_user: Utilisateur effectuant l'opération (pour l'audit)
         audit_source: Source de l'opération (ex: "admin/users")
     """
+    now = datetime.now()
     with AuditLogger.with_context(session, audit_user, audit_source):
         if family_name is not None:
             user.family_name = family_name
@@ -108,8 +116,74 @@ def update_user(
             user.session_id = session_id
         if is_connected is not None:
             user.is_connected = is_connected
-        user.last_connection = datetime.now()
+        user.updated_at = now
         
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+    return user
+
+
+def login_user(
+    session: Session,
+    user: Users,
+    session_id: str,
+    audit_user: Optional[Users] = None,
+    audit_source: Optional[str] = None,
+) -> Users:
+    """Mark a user as logged in and issue a new session id.
+
+    This sets:
+    - is_connected = True
+    - session_id = provided session_id
+    - last_login_at = now
+    - last_seen_at = now
+    - updated_at = now
+    """
+    now = datetime.now()
+    with AuditLogger.with_context(session, audit_user, audit_source):
+        user.session_id = session_id
+        user.is_connected = True
+        user.last_login_at = now
+        user.last_seen_at = now
+        user.updated_at = now
+        # Legacy (kept for compatibility / migration backfill)
+        user.last_connection = now
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+    return user
+
+
+def touch_user_last_seen(
+    session: Session,
+    user: Users,
+    audit_user: Optional[Users] = None,
+    audit_source: Optional[str] = None,
+) -> Users:
+    """Update user last_seen_at (activity heartbeat)."""
+    now = datetime.now()
+    with AuditLogger.with_context(session, audit_user, audit_source):
+        user.last_seen_at = now
+        user.updated_at = now
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+    return user
+
+
+def logout_user(
+    session: Session,
+    user: Users,
+    audit_user: Optional[Users] = None,
+    audit_source: Optional[str] = None,
+) -> Users:
+    """Log out a user (server-side): clear session_id and is_connected."""
+    now = datetime.now()
+    with AuditLogger.with_context(session, audit_user, audit_source):
+        user.is_connected = False
+        user.session_id = None
+        user.updated_at = now
         session.add(user)
         session.commit()
         session.refresh(user)

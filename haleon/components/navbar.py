@@ -78,7 +78,10 @@ def navbar() -> rx.Component:
                 avatar(),
                 rx.button(
                     NavbarState.t_login_with_john_doe,
-                    on_click=AuthState.simulate_sso_login,
+                    # DELETE WHEN REAL SSO IS LIVE:
+                    # - Rename label to "Login with SSO" (or translation key)
+                    # - Keep handler as start_sso_login
+                    on_click=AuthState.start_sso_login,
                     size="3",
                     color_scheme="blue",
                     class_name="login-btn",
