@@ -5,6 +5,8 @@ from typing import Optional
 from datetime import datetime
 import uuid
 import os
+import logging
+from http.cookies import SimpleCookie
 from haleon.db.model.users import Users
 from haleon.db.database import get_session
 from haleon.db.crud.users import (
@@ -17,7 +19,27 @@ from haleon.db.crud.users import (
 )
 from haleon.auth.permissions import UserPermissions
 from haleon.state.i18n_state import I18nState
-from haleon.auth.sso import SSO
+from sqlmodel import SQLModel
+
+logger = logging.getLogger("haleon.auth")
+
+class UserView(SQLModel):
+    """UI-safe snapshot of a user (NOT an ORM object)."""
+
+    id: Optional[int] = None
+    email: str = ""
+    family_name: Optional[str] = None
+    first_name: Optional[str] = None
+    country: Optional[str] = None
+
+    is_connected: bool = False
+    is_validated: bool = False
+    is_active: bool = False
+    is_admin: bool = False
+
+    last_login_at: Optional[datetime] = None
+    last_seen_at: Optional[datetime] = None
+    last_connection: Optional[datetime] = None  # legacy
 
 
 class AuthState(I18nState):
@@ -25,19 +47,12 @@ class AuthState(I18nState):
     
     state_auto_setters: bool = True
     
-    # Session cookie (partagée entre onglets).
-    #
-    # NOTE: Reflex gère les cookies côté client (JS) via universal-cookie.
-    # Cela signifie que le flag HttpOnly n'est pas configurable via rx.Cookie aujourd'hui.
-    # On active tout de même SameSite/Path/Max-Age pour réduire les risques.
-    session_id: str = rx.Cookie(
-        name="session_id",
-        path="/",
-        same_site="lax",
-    )
-    
-    # Utilisateur connecté (chargé depuis la BDD via session_id)
-    current_user: Optional[Users] = None
+    # Session ID (server-side), read from the HttpOnly cookie in request headers.
+    # IMPORTANT: Do NOT use rx.Cookie here if you want HttpOnly security.
+    session_id: str = ""
+
+    # Utilisateur connecté (snapshot sérialisable)
+    current_user: Optional[UserView] = None
     is_authenticated: bool = False
     
     # Permissions (mises à jour automatiquement)
@@ -54,28 +69,63 @@ class AuthState(I18nState):
     _refresh_apps_trigger: int = 0  # Trigger pour forcer le rechargement des applications
     _loading_apps: bool = False  # Flag pour éviter les appels multiples
 
-    # =========================
-    # SSO (OIDC) transition layer
-    # =========================
-    # These fields store temporary SSO data across the redirect round-trip.
-    # They are intentionally kept in state (per client) so the callback can validate `state`
-    # and provide the PKCE code_verifier back to the `SSO` class without changing it.
-    #
-    # When real SSO is fully deployed, you can keep these.
-    sso_state: str = ""
-    sso_code_verifier: str = ""
+    # SSO is handled server-side by /auth/login and /auth/callback (HttpOnly cookie).
     sso_error: str = ""
-    sso_in_progress: bool = False
-    sso_use_real: bool = True  # Flip to False to force dummy login during transition.
+    # Default to fake login for local/dev when no .env is present.
+    # Set to True (and provide SSO env vars) to enable real SSO.
+    sso_use_real: bool = False
+
+    def _cookie_session_id(self) -> str:
+        """Read the HttpOnly `session_id` cookie from router headers (server-side)."""
+        headers = (self.router_data or {}).get("headers") or {}
+        cookie_header = headers.get("cookie") or ""
+        if not cookie_header:
+            return ""
+        try:
+            c = SimpleCookie()
+            c.load(cookie_header)
+            return (c.get("session_id").value if c.get("session_id") else "") or ""
+        except Exception:
+            return ""
+
+    def _auth_backend(self) -> str:
+        """Backend base URL for auth endpoints (dev: http://localhost:8000)."""
+        return (os.getenv("BACKEND_BASE_URL") or "http://localhost:8000").rstrip("/")
+
+    def _auth_url(self, path: str) -> str:
+        base = self._auth_backend()
+        if not path.startswith("/"):
+            path = "/" + path
+        return base + path
+
+    def _to_user_view(self, user: Optional[Users]) -> Optional[UserView]:
+        """Convert ORM Users -> UI-safe snapshot."""
+        if not user:
+            return None
+        return UserView(
+            id=getattr(user, "id", None),
+            email=getattr(user, "email", "") or "",
+            family_name=getattr(user, "family_name", None),
+            first_name=getattr(user, "first_name", None),
+            country=getattr(user, "country", None),
+            is_connected=bool(getattr(user, "is_connected", False)),
+            is_validated=bool(getattr(user, "is_validated", False)),
+            is_active=bool(getattr(user, "is_active", False)),
+            is_admin=bool(getattr(user, "is_admin", False)),
+            last_login_at=getattr(user, "last_login_at", None),
+            last_seen_at=getattr(user, "last_seen_at", None),
+            last_connection=getattr(user, "last_connection", None),
+        )
     
     def load_user_from_session(self):
-        """Charge l'utilisateur depuis la session (cookie session_id)."""
-        session_id_to_use = self.session_id if self.session_id else ""
-        print(f"[DEBUG load_user_from_session] Début - session_id (Cookie): '{session_id_to_use}'")
+        """Charge l'utilisateur depuis la session (cookie HttpOnly session_id)."""
+        session_id_to_use = self._cookie_session_id()
+        self.session_id = session_id_to_use  # server-side copy for DB lookups
+        logger.debug("load_user_from_session start (cookie session_id present=%s)", bool(session_id_to_use))
         
         # Vérifier si session_id existe
         if not session_id_to_use or session_id_to_use == "":
-            print("[DEBUG load_user_from_session] Aucune session_id trouvée dans cookie")
+            logger.debug("load_user_from_session: no session_id cookie")
             self.is_authenticated = False
             self.current_user = None
             self.accessible_apps = []  # VIDER les apps si pas de session
@@ -101,28 +151,30 @@ class AuthState(I18nState):
                 
                 if elapsed > self.session_duration:
                     # Session expirée - déconnecter l'utilisateur
-                    print(f"[DEBUG load_user_from_session] Session expirée (élapsed: {elapsed:.0f}s, max: {self.session_duration}s)")
+                    logger.info("session expired (elapsed=%ss, max=%ss)", int(elapsed), int(self.session_duration))
                     logout_user(session=session, user=user, audit_user=None, audit_source="auth/expire")
                     
                     # Nettoyer l'état
-                    self.session_id = ""  # Vider cookie
+                    self.session_id = ""
                     self.is_authenticated = False
                     self.current_user = None
                     self.accessible_apps = []
-                    return
+                    # Clear HttpOnly cookie via backend route.
+                    return rx.redirect(self._auth_url("/auth/logout"))
                 
                 # Session valide
                 # Mettre à jour last_seen_at (heartbeat) côté serveur.
                 user = touch_user_last_seen(session=session, user=user, audit_user=None, audit_source="auth/seen")
-                self.current_user = user
-                self.is_authenticated = True
+                user_view = self._to_user_view(user)
+                self.current_user = user_view
+                self.is_authenticated = bool(user_view and user_view.is_connected)
                 # Pour l'UI: compte à rebours basé sur le dernier "seen".
-                self.session_start_time = user.last_seen_at or now
+                self.session_start_time = (user_view.last_seen_at if user_view else None) or now
                 
                 # Mettre à jour les permissions
-                self.is_active = UserPermissions.is_active_user(user)
-                self.is_validated = UserPermissions.is_validated_user(user)
-                self.is_admin = UserPermissions.is_admin_user(user)
+                self.is_active = UserPermissions.is_active_user(user_view) if user_view else False
+                self.is_validated = UserPermissions.is_validated_user(user_view) if user_view else False
+                self.is_admin = UserPermissions.is_admin_user(user_view) if user_view else False
                 
                 # VIDER les apps - elles seront rechargées par le layout avec les bonnes vérifications
                 self.accessible_apps = []
@@ -132,7 +184,7 @@ class AuthState(I18nState):
                 # Les applications seront chargées automatiquement par le layout si nécessaire
             else:
                 # Session invalide, nettoyer
-                self.session_id = ""  # Vider cookie
+                self.session_id = ""
                 self.is_authenticated = False
                 self.current_user = None
                 self.accessible_apps = []  # VIDER les apps si session invalide
@@ -227,19 +279,21 @@ class AuthState(I18nState):
                     session.refresh(user)
                     user = login_user(session=session, user=user, session_id=session_id, audit_user=None, audit_source="auth/login")
             
-            # Stocker le session_id dans le cookie (partagé entre onglets)
+            # DEV ONLY: this does NOT set an HttpOnly cookie (real SSO uses /auth/login + /auth/callback).
+            # We keep the server-side copy for consistency with the rest of the state.
             self.session_id = session_id
-            print(f"[DEBUG simulate_sso_login] Session ID sauvegardé dans cookie: {session_id}")
+            logger.debug("simulate_sso_login issued session (dev only)")
             
-            # Mettre à jour l'état Reflex (pour l'UI réactive)
-            self.current_user = user
-            self.is_authenticated = True
-            self.session_start_time = user.last_seen_at or session_start
+            # Mettre à jour l'état Reflex (pour l'UI réactive) - snapshot (pas ORM)
+            user_view = self._to_user_view(user)
+            self.current_user = user_view
+            self.is_authenticated = bool(user_view and user_view.is_connected)
+            self.session_start_time = (user_view.last_seen_at if user_view else None) or session_start
             
             # Mettre à jour les permissions
-            self.is_active = UserPermissions.is_active_user(user)
-            self.is_validated = UserPermissions.is_validated_user(user)
-            self.is_admin = UserPermissions.is_admin_user(user)
+            self.is_active = UserPermissions.is_active_user(user_view) if user_view else False
+            self.is_validated = UserPermissions.is_validated_user(user_view) if user_view else False
+            self.is_admin = UserPermissions.is_admin_user(user_view) if user_view else False
             
             # Charger les applications accessibles
             self.load_accessible_applications()
@@ -253,167 +307,15 @@ class AuthState(I18nState):
             session.close()
     
     def start_sso_login(self):
-        """Start the real SSO redirect flow using `haleon.auth.sso.SSO`.
+        """Start SSO redirect (server-side).
 
-        This does NOT log the user in directly. It redirects the browser to the IdP.
-        The IdP will redirect back to `/auth/callback` with `code` and `state`.
+        /auth/login starts the PKCE flow and redirects to the IdP.
+        /auth/callback completes it and sets the HttpOnly session cookie.
         """
-        # During transition you may want to keep the dummy flow available.
         if not self.sso_use_real:
-            return self.simulate_sso_login()
-
-        self.sso_error = ""
-        self.sso_in_progress = True
-
-        # Ensure REDIRECT_URI is aligned with the app route we register.
-        # Default to /auth/callback if not explicitly configured.
-        if not os.getenv("REDIRECT_URI"):
-            # This value is used by your SSO class; keep it configurable via env in prod.
-            os.environ["REDIRECT_URI"] = "http://localhost:3000/auth/callback"
-
-        try:
-            sso = SSO()
-            auth_url, state = sso.get_authorization_url()
-            if not auth_url or not state:
-                self.sso_error = "Impossible de démarrer la connexion SSO (auth_url/state manquant)."
-                self.sso_in_progress = False
-                return rx.toast.error(self.sso_error)
-
-            # Persist across redirect (per client).
-            self.sso_state = state
-            self.sso_code_verifier = sso.code_verifier or ""
-
-            return rx.redirect(auth_url)
-        except Exception as e:
-            self.sso_error = f"Erreur SSO (start): {e}"
-            self.sso_in_progress = False
-            return rx.toast.error(self.sso_error)
-
-    def finish_sso_login_from_router(self):
-        """Callback handler invoked from `/auth/callback` on_load.
-
-        Extracts `code` and `state` from query params and completes the SSO login.
-        """
-        query = (self.router_data or {}).get("query") or {}
-        code = query.get("code", "")
-        returned_state = query.get("state", "")
-        return self.finish_sso_login(code=code, returned_state=returned_state)
-
-    def finish_sso_login(self, code: str, returned_state: str):
-        """Complete SSO login after redirect (server-side validation + DB session issuance)."""
-        self.sso_error = ""
-
-        if not code:
-            self.sso_error = "Callback SSO invalide: paramètre 'code' manquant."
-            self.sso_in_progress = False
-            return rx.toast.error(self.sso_error)
-
-        if not returned_state:
-            self.sso_error = "Callback SSO invalide: paramètre 'state' manquant."
-            self.sso_in_progress = False
-            return rx.toast.error(self.sso_error)
-
-        # Validate anti-CSRF state
-        if not self.sso_state or returned_state != self.sso_state:
-            self.sso_error = "Callback SSO invalide: state ne correspond pas."
-            self.sso_in_progress = False
-            return rx.toast.error(self.sso_error)
-
-        try:
-            sso = SSO()
-            # Restore PKCE + state into the SSO instance (without modifying the class).
-            sso.state = self.sso_state
-            sso.code_verifier = self.sso_code_verifier
-
-            token = sso.fetch_tokens(code)
-            if not token:
-                self.sso_error = "Erreur SSO: impossible de récupérer les tokens."
-                self.sso_in_progress = False
-                return rx.toast.error(self.sso_error)
-
-            claims = sso.verify_id_token()
-            if not claims:
-                self.sso_error = "Erreur SSO: token ID invalide."
-                self.sso_in_progress = False
-                return rx.toast.error(self.sso_error)
-
-            # Extract claims from your SSO class.
-            email = sso.email
-            first_name = sso.first_name
-            family_name = sso.family_name
-            country = sso.country
-
-            if not email:
-                self.sso_error = "Erreur SSO: claim 'email' manquant."
-                self.sso_in_progress = False
-                return rx.toast.error(self.sso_error)
-
-            # Issue application session id (server-side) and persist in DB.
-            session_id = str(uuid.uuid4())
-
-            session_gen = get_session()
-            session = next(session_gen)
-            try:
-                user = get_user_by_email(session, email)
-                if user:
-                    user = update_user(
-                        session=session,
-                        user=user,
-                        family_name=family_name,
-                        first_name=first_name,
-                        country=country,
-                        audit_user=None,
-                        audit_source="auth/sso",
-                    )
-                    user = login_user(
-                        session=session,
-                        user=user,
-                        session_id=session_id,
-                        audit_user=None,
-                        audit_source="auth/sso",
-                    )
-                else:
-                    user = create_user(
-                        session=session,
-                        email=email,
-                        family_name=family_name,
-                        first_name=first_name,
-                        country=country,
-                        is_admin=False,
-                        is_connected=False,
-                        audit_user=None,
-                        audit_source="auth/sso",
-                    )
-                    user = login_user(
-                        session=session,
-                        user=user,
-                        session_id=session_id,
-                        audit_user=None,
-                        audit_source="auth/sso",
-                    )
-            finally:
-                session.close()
-
-            # Save session cookie and hydrate state.
-            self.session_id = session_id
-            self.current_user = user
-            self.is_authenticated = True
-            self.session_start_time = user.last_seen_at or datetime.now()
-            self.is_active = UserPermissions.is_active_user(user)
-            self.is_validated = UserPermissions.is_validated_user(user)
-            self.is_admin = UserPermissions.is_admin_user(user)
-
-            # Clean one-time SSO values after successful login.
-            self.sso_state = ""
-            self.sso_code_verifier = ""
-            self.sso_in_progress = False
-
-            rx.toast.success(f"Connexion SSO réussie ! Bienvenue {first_name or ''} {family_name or ''}".strip())
-            return rx.redirect("/home")
-        except Exception as e:
-            self.sso_error = f"Erreur SSO (finish): {e}"
-            self.sso_in_progress = False
-            return rx.toast.error(self.sso_error)
+            # DEV mode: keep dummy SSO user, but set HttpOnly cookie server-side.
+            return rx.redirect(self._auth_url("/auth/dev-login"))
+        return rx.redirect(self._auth_url("/auth/login"))
 
     def redirect_after_login(self):
         """Redirige vers la page d'accueil après connexion."""
@@ -421,28 +323,8 @@ class AuthState(I18nState):
     
     def logout(self):
         """Déconnecte l'utilisateur."""
-        if self.current_user:
-            # Mettre à jour la BDD
-            session_gen = get_session()
-            session = next(session_gen)
-            try:
-                # Priorité: logout via session_id (plus sûr), fallback via email.
-                user = None
-                if self.session_id:
-                    from haleon.db.crud.users import get_user_by_session_id
-                    user = get_user_by_session_id(session, self.session_id)
-                if not user:
-                    user = get_user_by_email(session, self.current_user.email)
-                if user:
-                    logout_user(session=session, user=user, audit_user=None, audit_source="auth/logout")
-            finally:
-                session.close()
-        
-        # Nettoyer la session serveur
+        # Clear Reflex state immediately.
         self.session_id = ""
-        remove_cookie_event = rx.remove_cookie("session_id", {"path": "/"})
-        
-        # Réinitialiser l'état Reflex
         self.current_user = None
         self.is_authenticated = False
         self.is_active = False
@@ -450,7 +332,8 @@ class AuthState(I18nState):
         self.is_admin = False
         self.session_start_time = None
         self.accessible_apps = []
-        return remove_cookie_event
+        # Clear HttpOnly cookie server-side.
+        return rx.redirect(self._auth_url("/auth/logout"))
     
     def can_access_level(self, level: str) -> bool:
         """Vérifie l'accès à un niveau donné (active, validated, admin)."""
@@ -486,31 +369,38 @@ class AuthState(I18nState):
         """
         # Éviter les appels multiples : vérifier si déjà en cours
         if self._loading_apps:
-            print("[DEBUG load_accessible_applications] Déjà en cours de chargement, ignoré")
+            logger.debug("load_accessible_applications: already loading, skip")
             return
         
         # VÉRIFICATION STRICTE : utilisateur doit être authentifié ET current_user doit exister
         if not self.is_authenticated:
-            print("[DEBUG load_accessible_applications] ÉCHEC: Utilisateur non authentifié")
+            logger.debug("load_accessible_applications: not authenticated")
             self.accessible_apps = []
             return
         
         if not self.current_user:
-            print("[DEBUG load_accessible_applications] ÉCHEC: current_user est None")
+            logger.debug("load_accessible_applications: current_user is None")
             self.accessible_apps = []
             return
         
         if not self.current_user.is_active:
-            print(f"[DEBUG load_accessible_applications] ÉCHEC: Utilisateur {self.current_user.email} n'est pas actif")
+            logger.debug("load_accessible_applications: user not active")
             self.accessible_apps = []
             return
         
-        print(f"[DEBUG load_accessible_applications] Début - user: {self.current_user.email} (id={self.current_user.id}), is_active={self.current_user.is_active}, is_validated={self.current_user.is_validated}, is_admin={self.current_user.is_admin}")
+        logger.debug(
+            "load_accessible_applications start user=%s id=%s active=%s validated=%s admin=%s",
+            self.current_user.email,
+            self.current_user.id,
+            self.current_user.is_active,
+            self.current_user.is_validated,
+            self.current_user.is_admin,
+        )
         
         # FORCER le rechargement en vidant d'abord la liste pour éviter le cache
         self.accessible_apps = []
         self._loading_apps = True
-        print(f"[DEBUG load_accessible_applications] Liste vidée, début du chargement...")
+        logger.debug("load_accessible_applications: list cleared, loading...")
         
         from haleon.db.crud.applications import get_active_applications
         from haleon.auth.permissions import ApplicationPermissions
@@ -519,7 +409,7 @@ class AuthState(I18nState):
         session = next(session_gen)
         try:
             apps = get_active_applications(session)
-            print(f"[DEBUG load_accessible_applications] {len(apps)} applications actives trouvées dans la BDD")
+            logger.debug("load_accessible_applications: %s active apps in DB", len(apps))
             
             # Filtrer selon les permissions et convertir en dict
             # SEULEMENT les apps avec un accès explicite seront ajoutées
@@ -527,24 +417,24 @@ class AuthState(I18nState):
             for app in apps:
                 app_code = app.code if app.code else ""
                 if not app_code:
-                    print(f"[DEBUG load_accessible_applications] Application {app.name} (id={app.id}) a un code vide, IGNORÉE")
+                    logger.debug("load_accessible_applications: app id=%s has empty code, skip", app.id)
                     continue
                 
-                print(f"[DEBUG load_accessible_applications] Vérification accès pour app: {app.name} (code: {app_code}, id={app.id})")
+                logger.debug("load_accessible_applications: check access app=%s code=%s id=%s", app.name, app_code, app.id)
                 
                 # VÉRIFICATION DIRECTE dans la BDD AVANT d'appeler can_access_app
                 from haleon.db.crud.user_app_access import get_user_app_access
                 direct_access_check = get_user_app_access(session, self.current_user.id, app.id)
                 if direct_access_check:
-                    print(f"[DEBUG load_accessible_applications] ⚠️  ACCÈS TROUVÉ DIRECTEMENT dans la BDD pour {app.name} (access_id={direct_access_check.id})")
+                    logger.debug("load_accessible_applications: direct access found (access_id=%s)", direct_access_check.id)
                 else:
-                    print(f"[DEBUG load_accessible_applications] ⚠️  AUCUN ACCÈS dans la BDD pour {app.name} (user_id={self.current_user.id}, app_id={app.id})")
+                    logger.debug("load_accessible_applications: no direct access (user_id=%s app_id=%s)", self.current_user.id, app.id)
                 
                 # VÉRIFICATION CRITIQUE : can_access_app vérifie l'accès explicite
                 can_access = ApplicationPermissions.can_access_app(self.current_user, app_code)
                 
                 if can_access:
-                    print(f"[DEBUG load_accessible_applications] ✓ Application {app.name} AJOUTÉE (accès autorisé)")
+                    logger.debug("load_accessible_applications: app added (allowed)")
                     accessible_apps.append({
                         "id": app.id,
                         "name": app.name,
@@ -554,16 +444,14 @@ class AuthState(I18nState):
                         "description": app.description or "",
                     })
                 else:
-                    print(f"[DEBUG load_accessible_applications] ✗ Application {app.name} EXCLUE (pas d'accès explicite)")
+                    logger.debug("load_accessible_applications: app excluded (no explicit access)")
             
-            print(f"[DEBUG load_accessible_applications] RÉSULTAT FINAL: {len(accessible_apps)} applications accessibles sur {len(apps)} applications actives")
+            logger.debug("load_accessible_applications done: accessible=%s of total=%s", len(accessible_apps), len(apps))
             self.accessible_apps = accessible_apps
             # Incrémenter le trigger pour forcer la mise à jour
             self._refresh_apps_trigger += 1
         except Exception as e:
-            print(f"[DEBUG load_accessible_applications] ERREUR lors du chargement: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("load_accessible_applications error: %s", e)
             self.accessible_apps = []
         finally:
             self._loading_apps = False

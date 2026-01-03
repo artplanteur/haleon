@@ -11,9 +11,11 @@ Also normalizes inconsistent legacy data:
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from sqlmodel import text
 
+logger = logging.getLogger("haleon.db.migrations")
 
 def _column_exists(session, table: str, column: str) -> bool:
     """Return True if a column exists in a sqlite table."""
@@ -33,13 +35,10 @@ def _column_exists(session, table: str, column: str) -> bool:
 
 def migrate_users_auth_timestamps(session, db_path: Path):
     """Apply migration to the sqlite database if needed (idempotent)."""
-    print(f"\n{'='*60}")
-    print("Migration: Ajout des colonnes auth timestamps à users")
-    print(f"Base de données: {db_path}")
-    print(f"{'='*60}\n")
+    logger.info("Migration users auth timestamps (db=%s)", db_path)
 
     if not db_path.exists():
-        print("[INFO] Base de données non trouvée, migration ignorée (sera créée au démarrage).")
+        logger.info("DB not found, skipping migration (will be created on startup).")
         return
 
     try:
@@ -52,12 +51,12 @@ def migrate_users_auth_timestamps(session, db_path: Path):
 
         for col, col_type in columns_to_add:
             if _column_exists(session, table, col):
-                print(f"[OK] Colonne '{col}' existe déjà dans '{table}'")
+                logger.debug("Column exists: %s.%s", table, col)
                 continue
-            print(f"Ajout de la colonne '{col}'...")
+            logger.info("Adding column %s.%s...", table, col)
             session.exec(text(f'ALTER TABLE "{table}" ADD COLUMN "{col}" {col_type}'))
             session.commit()
-            print(f"[OK] Colonne '{col}' ajoutée")
+            logger.info("Column added: %s.%s", table, col)
 
         # Backfill timestamps from legacy last_connection when available.
         session.exec(
@@ -83,12 +82,9 @@ def migrate_users_auth_timestamps(session, db_path: Path):
             )
         )
         session.commit()
-        print("[OK] Backfill et normalisation appliqués")
+        logger.info("Backfill/normalization applied")
     except Exception as e:
-        print(f"[ERREUR] Erreur lors de la migration users auth timestamps: {e}")
-        import traceback
-
-        traceback.print_exc()
+        logger.exception("users auth timestamps migration failed: %s", e)
         session.rollback()
         raise
 

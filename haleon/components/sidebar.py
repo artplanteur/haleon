@@ -1,10 +1,12 @@
 """Composant Sidebar/Drawer pour le menu de navigation."""
 
 import reflex as rx
+import logging
 from haleon.auth.auth_state import AuthState
 from haleon.state.i18n_state import I18nState
 from haleon.apps.loader import get_application_admin_menu_items
 
+logger = logging.getLogger("haleon.components.sidebar")
 
 class SidebarState(I18nState):
     """État pour gérer l'ouverture/fermeture du drawer."""
@@ -42,7 +44,7 @@ class SidebarState(I18nState):
             items = get_application_admin_menu_items(app_code)
             return items
         except Exception as e:
-            print(f"Erreur lors du chargement des items de menu pour {app_code}: {e}")
+            logger.exception("Failed to load admin menu items for %s: %s", app_code, e)
             return []
 
 

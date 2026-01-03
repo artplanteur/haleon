@@ -2,10 +2,12 @@
 
 import os
 import importlib
+import logging
 from pathlib import Path
 from sqlmodel import SQLModel, create_engine, Session
 from typing import Generator
 
+logger = logging.getLogger("haleon.db")
 # Chemin vers la base de données (en dehors du projet pour éviter les recompilations)
 BASE_DIR = Path(__file__).parent.parent.parent
 # Mettre la BDD dans le dossier parent du projet (en dehors de haleonv1)
@@ -47,7 +49,7 @@ def _discover_application_models():
                     importlib.import_module(module_name)
                 except (ImportError, AttributeError) as e:
                     # Ignorer les erreurs d'import (application peut ne pas avoir de modèles)
-                    print(f"Warning: Could not import models from {app_code}: {e}")
+                    logger.warning("Could not import models from %s: %s", app_code, e)
 
 
 def init_db():
@@ -66,7 +68,7 @@ def init_db():
             migrate_users_auth_timestamps(session, DB_PATH)
     except Exception as e:
         # Ne pas bloquer le démarrage en dev si une migration échoue.
-        print(f"Warning: users auth timestamps migration failed: {e}")
+        logger.warning("users auth timestamps migration failed: %s", e)
     
     # Créer les triggers d'audit pour toutes les tables
     # Utiliser recreate_audit_triggers pour s'assurer que tous les triggers sont à jour

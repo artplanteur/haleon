@@ -1,6 +1,7 @@
 """Page admin - Vue d'ensemble et statistiques."""
 
 import reflex as rx
+import logging
 from haleon.auth.auth_state import AuthState
 from haleon.components.layout import layout
 from haleon.components.callouts import access_denied_callout
@@ -17,6 +18,7 @@ from haleon.db.crud.logs import (
 from sqlalchemy import inspect, text
 from datetime import datetime, timedelta
 
+logger = logging.getLogger("haleon.pages.admin.overview")
 
 class OverviewAdminState(I18nState):
     """État pour la vue d'ensemble."""
@@ -181,18 +183,17 @@ class OverviewAdminState(I18nState):
         try:
             from haleon.db.crud.applications import get_all_applications
             apps = get_all_applications(session)
-            print(f"[DEBUG load_app_tables_from_value] Recherche de l'application: '{value}'")
-            print(f"[DEBUG load_app_tables_from_value] Applications disponibles: {[a.name for a in apps]}")
+            logger.debug("load_app_tables_from_value searching app=%s", value)
             
             for app in apps:
                 if app.name == value:
-                    print(f"[DEBUG load_app_tables_from_value] ✓ Application trouvée: {app.name} (ID: {app.id}, Code: {app.code})")
+                    logger.debug("load_app_tables_from_value app found: %s", app.name)
                     self.selected_app_name = app.name
                     self.load_app_tables(app.id)
                     return
             
             # Si l'application n'est pas trouvée
-            print(f"[DEBUG load_app_tables_from_value] ✗ Application '{value}' non trouvée")
+            logger.debug("load_app_tables_from_value app not found: %s", value)
             self.selected_app_id = -1
             self.selected_app_name = ""
             self.app_tables = []
@@ -222,16 +223,13 @@ class OverviewAdminState(I18nState):
             inspector = inspect(engine)
             all_tables = inspector.get_table_names()
             
-            # Debug: afficher les informations
-            print(f"[DEBUG load_app_tables] App ID: {app_id}, App Code: {app.code}, Normalisé: {app_code}")
-            print(f"[DEBUG load_app_tables] Préfixe recherché: {prefix}")
-            print(f"[DEBUG load_app_tables] Toutes les tables: {all_tables}")
+            logger.debug("load_app_tables app_id=%s app_code=%s prefix=%s", app_id, app_code, prefix)
             
             app_tables = []
             for table_name in all_tables:
                 # Comparaison insensible à la casse
                 if table_name.upper().startswith(prefix.upper()):
-                    print(f"[DEBUG load_app_tables] ✓ Table trouvée: {table_name}")
+                    logger.debug("load_app_tables table found: %s", table_name)
                     # Récupérer les colonnes avec leurs types
                     columns = inspector.get_columns(table_name)
                     column_names = [col["name"] for col in columns]
@@ -249,7 +247,7 @@ class OverviewAdminState(I18nState):
                         result = session.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
                         row_count = result.scalar() or 0
                     except Exception as e:
-                        print(f"[DEBUG load_app_tables] Erreur lors du comptage des lignes pour {table_name}: {e}")
+                        logger.exception("load_app_tables count error for %s: %s", table_name, e)
                         row_count = 0
                     
                     # Récupérer un aperçu des données (max 3 lignes) et le formater en chaîne
@@ -277,7 +275,7 @@ class OverviewAdminState(I18nState):
                         else:
                             preview_text = "Aucune donnée"
                     except Exception as e:
-                        print(f"[DEBUG load_app_tables] Erreur lors de la récupération de l'aperçu pour {table_name}: {e}")
+                        logger.exception("load_app_tables preview error for %s: %s", table_name, e)
                         preview_text = "Erreur lors du chargement"
                     
                     # Créer la chaîne de colonnes avec types (max 5)

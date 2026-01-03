@@ -1,10 +1,12 @@
 """Système de permissions en cascade pour Haleon."""
 
+import logging
 from haleon.db.model.users import Users
 from haleon.db.model.applications import Applications
 from haleon.db.database import get_session
 from haleon.db.crud.user_app_access import get_user_app_access
 
+logger = logging.getLogger("haleon.auth.permissions")
 
 class UserPermissions:
     """Gestion des permissions utilisateur en cascade."""
@@ -65,20 +67,20 @@ class ApplicationPermissions:
         """
         # VÉRIFICATION STRICTE : utilisateur doit exister et être actif
         if not user:
-            print(f"[DEBUG can_access_app] ÉCHEC: Utilisateur est None")
+            logger.debug("can_access_app: user is None")
             return False
         
         if not user.is_active:
-            print(f"[DEBUG can_access_app] ÉCHEC: Utilisateur {user.email if user else 'None'} n'est pas actif")
+            logger.debug("can_access_app: user not active")
             return False
         
         if not app_code:
-            print(f"[DEBUG can_access_app] ÉCHEC: app_code est vide")
+            logger.debug("can_access_app: app_code empty")
             return False
         
         # Normaliser le code en minuscule
         app_code_normalized = app_code.lower() if app_code else ""
-        print(f"[DEBUG can_access_app] Début vérification - user: {user.email} (id={user.id}), app_code: {app_code} (normalisé: {app_code_normalized})")
+        logger.debug("can_access_app start user=%s id=%s code=%s", user.email, user.id, app_code_normalized)
         
         # Récupérer l'application
         session_gen = get_session()
@@ -88,38 +90,35 @@ class ApplicationPermissions:
             app = get_application_by_code(session, app_code_normalized)
             
             if not app:
-                print(f"[DEBUG can_access_app] ÉCHEC: Application '{app_code_normalized}' non trouvée")
+                logger.debug("can_access_app: app not found (%s)", app_code_normalized)
                 return False
             
             if not app.is_active:
-                print(f"[DEBUG can_access_app] ÉCHEC: Application '{app.name}' n'est pas active")
+                logger.debug("can_access_app: app not active (%s)", app_code_normalized)
                 return False
             
-            print(f"[DEBUG can_access_app] Application trouvée: {app.name} (id={app.id}, code={app.code}, minimum_requirement={app.minimum_requirement})")
+            logger.debug("can_access_app: app found id=%s code=%s", app.id, app.code)
             
             # Vérifier le minimum_requirement (prérequis uniquement - ne donne pas l'accès)
             if not UserPermissions.can_access(user, app.minimum_requirement):
-                print(f"[DEBUG can_access_app] ÉCHEC: Utilisateur ne satisfait pas le minimum_requirement '{app.minimum_requirement}'")
+                logger.debug("can_access_app: minimum requirement not met (%s)", app.minimum_requirement)
                 return False
             
-            print(f"[DEBUG can_access_app] Minimum requirement satisfait: {app.minimum_requirement}")
+            logger.debug("can_access_app: minimum requirement met (%s)", app.minimum_requirement)
             
             # VÉRIFICATION CRITIQUE : Un accès explicite dans UserApplicationAccess est OBLIGATOIRE
             access = get_user_app_access(session, user.id, app.id)
             
             if access is None:
                 # PAS d'accès explicite → PAS d'accès (OBLIGATOIRE)
-                print(f"[DEBUG can_access_app] ÉCHEC CRITIQUE: Aucun accès explicite trouvé pour user_id={user.id}, app_id={app.id} (code={app.code})")
-                print(f"[DEBUG can_access_app] RETOUR: False (pas d'accès explicite dans UserApplicationAccess)")
+                logger.debug("can_access_app: no explicit access (user_id=%s app_id=%s)", user.id, app.id)
                 return False
             
             # Un accès existe → accès autorisé
-            print(f"[DEBUG can_access_app] SUCCÈS: Accès trouvé (id={access.id}) → ACCÈS AUTORISÉ")
+            logger.debug("can_access_app: access allowed (access_id=%s)", access.id)
             return True
         except Exception as e:
-            print(f"[DEBUG can_access_app] ERREUR lors de la vérification d'accès à l'application {app_code}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("can_access_app error for %s: %s", app_code, e)
             return False
         finally:
             session.close()

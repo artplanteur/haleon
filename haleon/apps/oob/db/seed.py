@@ -1,6 +1,7 @@
 """Script de seed pour l'application OOB - Ajoute des données de test."""
 
 import os
+import logging
 from haleon.db.database import get_session
 from haleon.db.crud.users import get_user_by_email
 from haleon.apps.oob.db.crud import (
@@ -17,6 +18,7 @@ import random
 import pytz
 
 swiss_tz = pytz.timezone("Europe/Zurich")
+logger = logging.getLogger("haleon.apps.oob.seed")
 
 
 def seed_oob_data(disable_triggers: bool = None):
@@ -56,11 +58,11 @@ def seed_oob_data(disable_triggers: bool = None):
     triggers_were_disabled = False
     try:
         if disable_triggers:
-            print("Desactivation temporaire des triggers d'audit pour le seed...")
+            logger.debug("Disabling audit triggers for seed...")
             disable_all_audit_triggers(session)
             triggers_were_disabled = True
         else:
-            print("INFO: Les triggers d'audit restent actives (mode production)")
+            logger.debug("Audit triggers remain enabled (production mode)")
             # S'assurer que la table temporaire existe si les triggers sont actifs
             try:
                 AuditLogger._ensure_context_table(session)
@@ -71,10 +73,10 @@ def seed_oob_data(disable_triggers: bool = None):
         # Vérifier si des données existent déjà
         existing_vendors = get_all_vendors(session)
         if existing_vendors:
-            print("INFO: Des donnees OOB existent deja. On continue pour ajouter les commentaires de test.")
+            logger.debug("OOB data already exists; continuing to add test comments.")
             # Ne pas retourner, continuer pour ajouter les commentaires
         
-        print("Seeding OOB data...")
+        logger.debug("Seeding OOB data...")
         
         # 1. Créer des vendors
         vendors_data = [
@@ -91,10 +93,10 @@ def seed_oob_data(disable_triggers: bool = None):
             if not existing:
                 vendor = create_vendor(session, code, description, audit_user=None, audit_source="seed")
                 vendors.append(vendor)
-                print(f"  OK - Vendor cree: {vendor.code} - {vendor.description}")
+                logger.debug("Vendor created: %s", vendor.code)
             else:
                 vendors.append(existing)
-                print(f"  - Vendor existant: {existing.code}")
+                logger.debug("Vendor exists: %s", existing.code)
         
         # 2. Créer des conversations de test sur différentes PO
         # Récupérer les utilisateurs disponibles
@@ -103,7 +105,7 @@ def seed_oob_data(disable_triggers: bool = None):
         bob = get_user_by_email(session, "bob.dupont@haleon.com")
         
         if not john_doe:
-            print("  WARNING: John Doe non trouve, creation de commentaires ignoree")
+            logger.warning("John Doe not found; skipping comment creation.")
         else:
             # Conversations de test - Format: (PO, username, comment, delay_seconds)
             # Le delay_seconds permet de simuler des commentaires à des moments différents
@@ -179,7 +181,7 @@ def seed_oob_data(disable_triggers: bool = None):
                     # Vérifier que l'utilisateur existe
                     user = get_user_by_email(session, username)
                     if not user:
-                        print(f"  WARNING: Utilisateur {username} non trouve, commentaire ignore")
+                        logger.warning("User %s not found; skipping comment.", username)
                         continue
                     
                     # Vérifier si ce commentaire existe déjà (éviter les doublons)
@@ -191,7 +193,7 @@ def seed_oob_data(disable_triggers: bool = None):
                         for c in existing_comments
                     )
                     if comment_exists:
-                        print(f"  - Commentaire deja existant pour {doc_ext} par {username}, ignore")
+                        logger.debug("Comment already exists for %s by %s; skipping.", doc_ext, username)
                         continue
                     
                     # Calculer le timestamp avec le délai
@@ -222,11 +224,14 @@ def seed_oob_data(disable_triggers: bool = None):
                             session.commit()
                             session.refresh(comment_obj)
                     
-                    print(f"  OK - Commentaire cree pour {doc_ext} par {username} (a {comment_time.strftime('%Y-%m-%d %H:%M:%S')})")
+                    logger.debug(
+                        "Comment created doc_ext=%s username=%s at=%s",
+                        doc_ext,
+                        username,
+                        comment_time.strftime("%Y-%m-%d %H:%M:%S"),
+                    )
                 except Exception as e:
-                    print(f"  WARNING: Erreur lors de la creation du commentaire pour {doc_ext}: {e}")
-                    import traceback
-                    traceback.print_exc()
+                    logger.exception("Error creating comment for %s: %s", doc_ext, e)
         
         # 3. Créer des accès utilisateur-vendor
         if john_doe and vendors:
@@ -241,7 +246,7 @@ def seed_oob_data(disable_triggers: bool = None):
                         audit_user=None,
                         audit_source="seed",
                     )
-                    print(f"  OK - Acces accorde: {john_doe.email} -> {vendor.code}")
+                    logger.debug("Vendor access granted: %s -> %s", john_doe.email, vendor.code)
                 except Exception as e:
                     # Ignorer si l'accès existe déjà
                     pass
@@ -259,7 +264,7 @@ def seed_oob_data(disable_triggers: bool = None):
                         audit_user=None,
                         audit_source="seed",
                     )
-                    print(f"  OK - Acces accorde: {alice.email} -> {vendor.code}")
+                    logger.debug("Vendor access granted: %s -> %s", alice.email, vendor.code)
                 except Exception as e:
                     pass
         
@@ -275,27 +280,25 @@ def seed_oob_data(disable_triggers: bool = None):
                     audit_user=None,
                     audit_source="seed",
                 )
-                print(f"  OK - Acces accorde: {bob.email} -> {selected_vendor.code}")
+                logger.debug("Vendor access granted: %s -> %s", bob.email, selected_vendor.code)
             except Exception as e:
                 pass
         
         session.commit()
-        print("OK - Seeding OOB termine avec succes!")
+        logger.info("OOB seeding completed successfully")
         
     except Exception as e:
-        print(f"ERREUR lors du seeding: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("OOB seeding failed: %s", e)
         session.rollback()
     finally:
         # Réactiver les triggers d'audit si on les a désactivés
         if triggers_were_disabled:
             try:
-                print("Reactivation des triggers d'audit...")
+                logger.debug("Re-enabling audit triggers...")
                 enable_all_audit_triggers(session)
-                print("OK - Triggers d'audit reactives")
+                logger.debug("Audit triggers re-enabled")
             except Exception as e:
-                print(f"WARNING: Erreur lors de la reactivation des triggers: {e}")
+                logger.warning("Failed to re-enable audit triggers: %s", e)
         session.close()
 
 

@@ -293,7 +293,6 @@ def avatar() -> rx.Component:
                             on_click=[
                                 AvatarState.close_popup,
                                 AuthState.logout,
-                                AuthState.redirect_to_login,
                             ],
                             color_scheme="red",
                             width="100%",

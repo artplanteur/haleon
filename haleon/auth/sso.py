@@ -1,9 +1,11 @@
 import base64, hashlib, secrets, os, httpx, jwt
+import logging
 from authlib.integrations.requests_client import OAuth2Session
 from dotenv import load_dotenv
 from datetime import datetime, timezone
 
 load_dotenv()
+logger = logging.getLogger("haleon.auth.sso")
 
 class SSO:
     def __init__(
@@ -70,7 +72,7 @@ class SSO:
             self.state = state  # Stockage du state
             return auth_url, state
         except Exception as e:
-            print(f"Erreur lors de la génération de l'URL d'autorisation: {e}")
+            logger.exception("SSO get_authorization_url failed: %s", e)
             return None, None
 
     def validate_state(self, returned_state: str) -> bool:
@@ -89,7 +91,7 @@ class SSO:
             self.id_token = token.get("id_token")
             return token
         except Exception as e:
-            print(f"Erreur lors de la récupération des tokens: {e}")
+            logger.exception("SSO fetch_tokens failed: %s", e)
             return None
 
     def verify_id_token(self):
@@ -120,7 +122,7 @@ class SSO:
             self.family_name = claims.get("family_name")
             return claims
         except Exception as e:
-            print(f"Erreur lors de la vérification du token: {e}")
+            logger.exception("SSO verify_id_token failed: %s", e)
             return None
 
     def get_userinfo(self):
@@ -128,7 +130,7 @@ class SSO:
             resp = httpx.get(os.getenv("USERINFO_ENDPOINT"), headers={"Authorization": f"Bearer {self.access_token}"})
             return resp.json()
         except Exception as e:
-            print(f"Erreur lors de la récupération des infos utilisateur: {e}")
+            logger.exception("SSO get_userinfo failed: %s", e)
             return None
 
     def refresh_token(self, refresh_token: str):
@@ -139,5 +141,5 @@ class SSO:
             self.id_token = token.get("id_token")
             return token
         except Exception as e:
-            print(f"Erreur lors du refresh token: {e}")
+            logger.exception("SSO refresh_token failed: %s", e)
             return None

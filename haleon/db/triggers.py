@@ -1,10 +1,12 @@
 """Génération dynamique de triggers SQLite pour l'audit de toutes les tables."""
 
 import json
+import logging
 from sqlmodel import Session
 from sqlalchemy import inspect, text
 from typing import List, Set
 
+logger = logging.getLogger("haleon.db.triggers")
 
 # Tables à exclure de l'audit (pour éviter la récursion)
 EXCLUDED_TABLES: Set[str] = {
@@ -79,10 +81,10 @@ def create_audit_triggers(session: Session, table_name: str):
                 NULL,
                 COALESCE(CAST(NEW.{col} AS TEXT), ''),
                 datetime('now'),
-                COALESCE((SELECT user_email FROM temp._audit_context LIMIT 1), NULL),
-                COALESCE((SELECT user_permissions FROM temp._audit_context LIMIT 1), NULL),
-                COALESCE((SELECT source FROM temp._audit_context LIMIT 1), NULL),
-                COALESCE((SELECT request_id FROM temp._audit_context LIMIT 1), NULL)
+                NULL,
+                NULL,
+                NULL,
+                NULL
         """)
     
     # SQLite nécessite que chaque statement soit séparé par un point-virgule
@@ -113,10 +115,10 @@ def create_audit_triggers(session: Session, table_name: str):
                 COALESCE(CAST(OLD.{col} AS TEXT), ''),
                 COALESCE(CAST(NEW.{col} AS TEXT), ''),
                 datetime('now'),
-                COALESCE((SELECT user_email FROM temp._audit_context LIMIT 1), NULL),
-                COALESCE((SELECT user_permissions FROM temp._audit_context LIMIT 1), NULL),
-                COALESCE((SELECT source FROM temp._audit_context LIMIT 1), NULL),
-                COALESCE((SELECT request_id FROM temp._audit_context LIMIT 1), NULL)
+                NULL,
+                NULL,
+                NULL,
+                NULL
             WHERE (OLD.{col} IS NULL AND NEW.{col} IS NOT NULL) 
                OR (OLD.{col} IS NOT NULL AND NEW.{col} IS NULL)
                OR (OLD.{col} IS NOT NULL AND NEW.{col} IS NOT NULL AND OLD.{col} <> NEW.{col})
@@ -148,10 +150,10 @@ def create_audit_triggers(session: Session, table_name: str):
                 COALESCE(CAST(OLD.{col} AS TEXT), ''),
                 NULL,
                 datetime('now'),
-                COALESCE((SELECT user_email FROM temp._audit_context LIMIT 1), NULL),
-                COALESCE((SELECT user_permissions FROM temp._audit_context LIMIT 1), NULL),
-                COALESCE((SELECT source FROM temp._audit_context LIMIT 1), NULL),
-                COALESCE((SELECT request_id FROM temp._audit_context LIMIT 1), NULL)
+                NULL,
+                NULL,
+                NULL,
+                NULL
         """)
     
     delete_trigger_sql = f"""
@@ -168,9 +170,9 @@ def create_audit_triggers(session: Session, table_name: str):
         session.execute(text(update_trigger_sql))
         session.execute(text(delete_trigger_sql))
         session.commit()
-        print(f"[OK] Triggers crees pour la table '{table_name}'")
+        logger.debug("Audit triggers created for table '%s'", table_name)
     except Exception as e:
-        print(f"X Erreur lors de la creation des triggers pour '{table_name}': {e}")
+        logger.exception("Failed to create audit triggers for '%s': %s", table_name, e)
         session.rollback()
 
 
@@ -206,13 +208,13 @@ def create_audit_triggers_for_all_tables(session: Session):
     inspector = inspect(session.bind)
     all_tables = inspector.get_table_names()
     
-    print(f"[AUDIT] Création des triggers pour {len(all_tables)} tables...")
+    logger.info("Creating audit triggers for %s tables...", len(all_tables))
     
     for table_name in all_tables:
         if table_name.lower() not in EXCLUDED_TABLES:
             create_audit_triggers(session, table_name)
     
-    print(f"[AUDIT] OK - Triggers crees pour toutes les tables")
+    logger.info("Audit triggers created for all tables")
 
 
 def recreate_audit_triggers(session: Session):
@@ -242,13 +244,13 @@ def disable_all_audit_triggers(session: Session):
     inspector = inspect(session.bind)
     all_tables = inspector.get_table_names()
     
-    print(f"[AUDIT] Desactivation des triggers pour {len(all_tables)} tables...")
+    logger.info("Disabling audit triggers for %s tables...", len(all_tables))
     
     for table_name in all_tables:
         if table_name.lower() not in EXCLUDED_TABLES:
             drop_audit_triggers(session, table_name)
     
-    print(f"[AUDIT] OK - Tous les triggers d'audit ont ete desactives")
+    logger.info("All audit triggers disabled")
 
 
 def enable_all_audit_triggers(session: Session):

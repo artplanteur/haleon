@@ -3,6 +3,8 @@
 import reflex as rx
 from pathlib import Path
 import json
+import os
+import logging
 from haleon.auth.auth_state import AuthState
 from haleon.components.layout import layout
 from haleon.components.callouts import access_denied_callout
@@ -17,8 +19,12 @@ from haleon.db.crud.applications import (
 )
 from haleon.db.model.applications import Applications
 
+logger = logging.getLogger("haleon.pages.admin.applications")
 # #region agent log
 def _debug_log(location, message, data=None, hypothesis_id=None):
+    # Never write debug files outside dev.
+    if os.getenv("ENV", "dev").strip().lower() != "dev":
+        return
     try:
         with open(r"c:\python\haleonv1\.cursor\debug.log", "a", encoding="utf-8") as f:
             f.write(json.dumps({
@@ -100,7 +106,7 @@ class ApplicationsAdminState(AuthState):
                     session.commit()
                     session.refresh(app)
                     normalized_count += 1
-                    print(f"[DEBUG] Code normalisé: '{old_code}' -> '{new_code}' pour l'application '{app.name}'")
+                    logger.debug("Code normalized: %s -> %s for app=%s", old_code, new_code, app.name)
         return normalized_count > 0
     
     def _fix_routes_silently(self, session):
@@ -124,7 +130,7 @@ class ApplicationsAdminState(AuthState):
                     routes_fixed = True
             return routes_fixed
         except Exception as e:
-            print(f"Erreur lors de la correction silencieuse des routes: {e}")
+            logger.exception("Silent route fix error: %s", e)
             return False
     
     def fix_routes(self):
@@ -157,11 +163,19 @@ class ApplicationsAdminState(AuthState):
             finally:
                 session.close()
         except Exception as e:
-            print(f"Erreur lors de la correction des routes: {e}")
+            logger.exception("Route fix error: %s", e)
             return rx.toast.error(f"Erreur lors de la correction des routes: {str(e)}")
     
     def load_applications(self):
         """Charge toutes les applications depuis la BDD et corrige automatiquement les routes."""
+        # --- SERVER-SIDE ADMIN GATE (read access) ---
+        if not self.is_authenticated or not self.current_user:
+            self.load_user_from_session()
+        if not self.is_admin:
+            self.applications = []
+            return self.show_unauthorized_toast()
+        # --- END GATE ---
+
         # #region agent log
         _debug_log("applications.py:load_applications", "load_applications called", {"applications_before": len(self.applications) if self.applications else 0}, "B")
         # #endregion
@@ -337,9 +351,7 @@ class ApplicationsAdminState(AuthState):
             finally:
                 session.close()
         except Exception as e:
-            print(f"Erreur lors de l'ajout d'application: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Create application error: %s", e)
             return rx.toast.error(
                 self.t("error_occurred"),
                 description=f"{self.t('error_occurred')}: {str(e)}"
@@ -428,9 +440,7 @@ class ApplicationsAdminState(AuthState):
             finally:
                 session.close()
         except Exception as e:
-            print(f"Erreur lors de la mise à jour d'application: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Update application error: %s", e)
             return rx.toast.error(
                 self.t("error_occurred"),
                 description=f"{self.t('error_occurred')}: {str(e)}"
@@ -472,7 +482,7 @@ class ApplicationsAdminState(AuthState):
             finally:
                 session.close()
         except Exception as e:
-            print(f"Erreur lors du toggle actif: {e}")
+            logger.exception("Toggle active error: %s", e)
             return rx.toast.error(self.t("modification_error"))
     
     def delete_app_from_app(self, app: Applications):
@@ -509,7 +519,7 @@ class ApplicationsAdminState(AuthState):
             finally:
                 session.close()
         except Exception as e:
-            print(f"Erreur lors de la suppression: {e}")
+            logger.exception("Delete application error: %s", e)
             return rx.toast.error(
                 self.t("error_occurred"),
                 description=f"{self.t('error_occurred')}: {str(e)}"

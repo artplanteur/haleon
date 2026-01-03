@@ -1,6 +1,7 @@
 """Page dynamique pour charger les applications."""
 
 import reflex as rx
+import logging
 from typing import Optional, Callable
 from haleon.auth.auth_state import AuthState
 from haleon.components.layout import layout
@@ -14,6 +15,7 @@ try:
 except ImportError:
     oob_page = None
 
+logger = logging.getLogger("haleon.pages.app_view")
 
 class AppViewState(AuthState):
     """État pour la page d'application - hérite de AuthState pour l'authentification."""
@@ -38,11 +40,10 @@ class AppViewState(AuthState):
         # app_code est automatiquement injecté par Reflex depuis la route [app_code]
         # Il est accessible via self.app_code sans avoir besoin de le déclarer
         if hasattr(self, 'app_code') and self.app_code:
-            print(f"[DEBUG on_load] app_code injecté par Reflex: '{self.app_code}'")
+            logger.debug("app_view on_load app_code=%s", self.app_code)
             self.load_app(self.app_code)
         else:
-            print(f"[DEBUG on_load] ✗ app_code non disponible ou vide")
-            print(f"[DEBUG on_load] Attributs disponibles: {[a for a in dir(self) if not a.startswith('_')]}")
+            logger.debug("app_view on_load: app_code missing/empty")
     
     def show_access_denied_toast(self):
         """Affiche un toast d'erreur pour accès refusé."""
@@ -53,18 +54,18 @@ class AppViewState(AuthState):
     
     def load_app(self, code: str):
         """Charge les informations de l'application et vérifie les permissions."""
-        print(f"[DEBUG load_app] Code reçu: '{code}'")
+        logger.debug("load_app code=%s", code)
         
         # Normaliser le code en minuscule pour correspondre aux URLs et aux dossiers
         # La recherche dans get_application_by_code est insensible à la casse
         code_normalized = code.lower() if code else ""
-        print(f"[DEBUG load_app] Code normalisé (minuscule): '{code_normalized}'")
+        logger.debug("load_app normalized=%s", code_normalized)
         
         session_gen = get_session()
         session = next(session_gen)
         try:
             app = get_application_by_code(session, code_normalized)
-            print(f"[DEBUG load_app] Application trouvée: {app.name if app else 'None'} (code: {app.code if app else 'None'})")
+            logger.debug("load_app app_found=%s", bool(app))
             if app:
                 self.current_app_name = app.name
                 self.current_app_code = app.code
@@ -90,25 +91,23 @@ class AppViewState(AuthState):
                         self.has_access = True
                         # Essayer de charger la page de l'application dynamiquement
                         # Le loader cherche le dossier de manière insensible à la casse
-                        print(f"[DEBUG load_app] Tentative de chargement de la page pour code: '{app.code}'")
+                        logger.debug("load_app: loading app page for %s", app.code)
                         app_page_func = get_application_page(app.code, app.code)
                         if app_page_func:
-                            print(f"[DEBUG load_app] ✓ Fonction page() trouvée pour '{app.code}'")
+                            logger.debug("load_app: page() found for %s", app.code)
                             # Stocker la fonction pour l'utiliser plus tard
                             self._app_page_func = app_page_func
                             # Tester l'appel de la fonction pour vérifier qu'elle fonctionne
                             try:
                                 test_component = app_page_func()
-                                print(f"[DEBUG load_app] ✓ Composant créé avec succès")
+                                logger.debug("load_app: component created")
                                 self.app_page_loaded = True
                             except Exception as e:
-                                print(f"[DEBUG load_app] ✗ Erreur lors de la création du composant: {e}")
-                                import traceback
-                                traceback.print_exc()
+                                logger.exception("load_app: component creation error: %s", e)
                                 self.app_page_loaded = False
                                 self._app_page_func = None
                         else:
-                            print(f"[DEBUG load_app] ✗ Aucune fonction page() trouvée pour '{app.code}'")
+                            logger.debug("load_app: no page() for %s", app.code)
                             self.app_page_loaded = False
                             self._app_page_func = None
                     else:
@@ -155,7 +154,7 @@ class AppViewState(AuthState):
             try:
                 return self._app_page_func()
             except Exception as e:
-                print(f"[DEBUG get_app_page_component] Erreur: {e}")
+                logger.exception("get_app_page_component error: %s", e)
                 return None
         return None
 

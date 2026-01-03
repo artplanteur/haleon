@@ -2,6 +2,8 @@
 
 import reflex as rx
 import json
+import os
+import logging
 from typing import Optional
 from haleon.auth.auth_state import AuthState
 from haleon.auth.permissions import UserPermissions
@@ -13,8 +15,12 @@ from haleon.db.crud.users import get_all_users
 from haleon.db.model.users import Users
 from haleon.db.audit_logger import AuditLogger
 
+logger = logging.getLogger("haleon.pages.admin.users")
 # #region agent log
 def _debug_log(location, message, data=None, hypothesis_id=None):
+    # Never write debug files outside dev.
+    if os.getenv("ENV", "dev").strip().lower() != "dev":
+        return
     try:
         with open(r"c:\python\haleonv1\.cursor\debug.log", "a", encoding="utf-8") as f:
             f.write(json.dumps({
@@ -43,16 +49,12 @@ class UsersAdminState(AuthState):
     
     def show_unauthorized_toast(self):
         """Affiche un toast d'erreur pour accès non autorisé."""
-        # Debug: vérifier pourquoi l'accès est refusé
-        print(f"[DEBUG show_unauthorized_toast] Vérification des permissions:")
-        print(f"  - is_authenticated: {self.is_authenticated}")
-        print(f"  - current_user: {self.current_user}")
-        print(f"  - is_admin: {self.is_admin}")
-        print(f"  - session_id: {self.session_id}")
-        if self.current_user:
-            print(f"  - current_user.is_admin (BDD): {self.current_user.is_admin}")
-            print(f"  - current_user.is_validated: {self.current_user.is_validated}")
-            print(f"  - current_user.is_active: {self.current_user.is_active}")
+        logger.debug(
+            "unauthorized: authenticated=%s current_user=%s is_admin=%s",
+            self.is_authenticated,
+            bool(self.current_user),
+            self.is_admin,
+        )
         
         return rx.toast.error(
             self.t("access_denied"),
@@ -70,16 +72,25 @@ class UsersAdminState(AuthState):
         if not self.is_authenticated or not self.current_user:
             self.load_user_from_session()
             # Debug: vérifier les valeurs après chargement
-            print(f"[DEBUG users.py:on_mount] Après load_user_from_session:")
-            print(f"  - is_authenticated: {self.is_authenticated}")
-            print(f"  - current_user: {self.current_user}")
-            print(f"  - is_admin: {self.is_admin}")
-            if self.current_user:
-                print(f"  - current_user.is_admin (BDD): {self.current_user.is_admin}")
+            logger.debug(
+                "on_mount after load_user_from_session authenticated=%s current_user=%s is_admin=%s",
+                self.is_authenticated,
+                bool(self.current_user),
+                self.is_admin,
+            )
         self.load_users()
     
     def load_users(self):
         """Charge tous les utilisateurs depuis la BDD."""
+        # --- SERVER-SIDE ADMIN GATE (read access) ---
+        # Ensure session is loaded for this State instance.
+        if not self.is_authenticated or not self.current_user:
+            self.load_user_from_session()
+        if not self.is_admin:
+            self.users = []
+            return self.show_unauthorized_toast()
+        # --- END GATE ---
+
         # #region agent log
         _debug_log("users.py:load_users", "load_users called", {"users_before": len(self.users) if self.users else 0}, "B")
         # #endregion
@@ -184,7 +195,7 @@ class UsersAdminState(AuthState):
             finally:
                 session.close()
         except Exception as e:
-            print(f"Erreur lors du toggle active: {e}")
+            logger.exception("toggle_active error: %s", e)
             return rx.toast.error("Erreur lors de la modification")
     
     def toggle_validated(self, user_id: int):
@@ -237,7 +248,7 @@ class UsersAdminState(AuthState):
             finally:
                 session.close()
         except Exception as e:
-            print(f"Erreur lors du toggle validated: {e}")
+            logger.exception("toggle_validated error: %s", e)
             return rx.toast.error(self.t("modification_error"))
     
     def toggle_admin(self, user_id: int):
@@ -286,9 +297,7 @@ class UsersAdminState(AuthState):
             finally:
                 session.close()
         except Exception as e:
-            print(f"Erreur lors du toggle admin: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("toggle_admin error: %s", e)
             return rx.toast.error(self.t("modification_error"))
 
 

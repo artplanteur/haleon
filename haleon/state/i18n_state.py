@@ -1,10 +1,12 @@
 """État pour la gestion de l'internationalisation (i18n)."""
 
 import json
+import logging
 import reflex as rx
 from pathlib import Path
 from typing import Dict, Optional
 
+logger = logging.getLogger("haleon.state.i18n")
 
 class I18nState(rx.State):
     """État pour gérer les traductions de l'application."""
@@ -25,7 +27,7 @@ class I18nState(rx.State):
         locale_dir = base_dir / "locale" / self.locale
         
         if not locale_dir.exists():
-            print(f"Warning: Locale directory not found: {locale_dir}")
+            logger.warning("Locale directory not found: %s", locale_dir)
             return
         
         self._translations = {}
@@ -35,7 +37,7 @@ class I18nState(rx.State):
                 with open(json_file, "r", encoding="utf-8") as f:
                     self._translations[module_name] = json.load(f)
             except Exception as e:
-                print(f"Error loading translation file {json_file}: {e}")
+                logger.exception("Error loading translation file %s: %s", json_file, e)
     
     def set_locale(self, new_locale: str):
         """Change la locale et recharge les traductions."""

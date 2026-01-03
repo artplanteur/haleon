@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 from typing import Any, List, Optional
 from datetime import datetime, timedelta
+import logging
 
 import requests
 from requests.auth import HTTPBasicAuth
@@ -18,6 +19,7 @@ from dotenv import load_dotenv
 
 from haleon.apps.oob.schemas.pydantic import PurchasingItem, IBPPurgDocItem
 
+logger = logging.getLogger("haleon.apps.oob.api")
 
 # -------------------------
 # ENV loading
@@ -48,6 +50,11 @@ API_PASSWORD = os.getenv("API_PASSWORD")
 # NOTE (per your request): verify MUST be False.
 # If you ever need to re-enable, set API_VERIFY_SSL=true and change the default below.
 API_VERIFY_SSL: bool = os.getenv("API_VERIFY_SSL", "false").strip().lower() in ("true", "1", "yes")
+
+# Hard guard: never allow SSL verification disabled in production.
+ENV = os.getenv("ENV", "dev").strip().lower()
+if ENV == "prod" and API_VERIFY_SSL is False:
+    raise RuntimeError("API_VERIFY_SSL=false is forbidden in prod (set API_VERIFY_SSL=true).")
 
 # Resource name can vary depending on your OData service.
 PURCHASING_ITEMS_RESOURCE = os.getenv("PURCHASING_ITEMS_RESOURCE", "IBPPurgReceiptElmnt")
@@ -237,7 +244,7 @@ def fetch_purchasing_items(
 
             return items
         except Exception as e:
-            print(f"Warning: real API fetch failed ({e}). Falling back to simulated data.")
+            logger.warning("Real API fetch failed (%s). Falling back to simulated data.", e)
 
     return _generate_fake_purchasing_items(50, vendor_codes=vendor_codes)
 

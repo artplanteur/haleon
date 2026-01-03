@@ -2,10 +2,12 @@
 
 import os
 import importlib
+import logging
 from pathlib import Path
 from typing import Optional, Callable
 import reflex as rx
 
+logger = logging.getLogger("haleon.apps.loader")
 
 def get_application_page(app_name: str, app_code: str) -> Optional[Callable[[], rx.Component]]:
     """
@@ -27,13 +29,13 @@ def get_application_page(app_name: str, app_code: str) -> Optional[Callable[[], 
     if apps_dir.exists():
         # Normaliser le code en majuscules pour la comparaison
         code_upper = app_code.upper()
-        print(f"[DEBUG loader] Recherche du dossier avec code: '{app_code}' (comparaison: '{code_upper}')")
+        logger.debug("loader: searching folder code=%s (cmp=%s)", app_code, code_upper)
         
         # Essayer d'abord avec le code tel quel
         potential_dir = apps_dir / app_code
         if potential_dir.exists() and potential_dir.is_dir():
             app_dir = potential_dir
-            print(f"[DEBUG loader] Dossier trouvé avec code exact: {app_dir.name}")
+            logger.debug("loader: exact folder found: %s", app_dir.name)
         else:
             # Chercher dans tous les dossiers pour trouver celui qui correspond (insensible à la casse)
             for item in apps_dir.iterdir():
@@ -41,7 +43,7 @@ def get_application_page(app_name: str, app_code: str) -> Optional[Callable[[], 
                     # Comparer insensible à la casse (comparer les versions majuscules)
                     if item.name.upper() == code_upper:
                         app_dir = item
-                        print(f"[DEBUG loader] Dossier correspondant trouvé: {item.name} (recherché: {app_code}, comparaison: {item.name.upper()} == {code_upper})")
+                        logger.debug("loader: matching folder found: %s", item.name)
                         break
     
     # Vérifier si le dossier existe
@@ -62,7 +64,7 @@ def get_application_page(app_name: str, app_code: str) -> Optional[Callable[[], 
         actual_folder_name = app_dir.name
         # Normaliser en minuscule pour correspondre au code normalisé
         actual_folder_name = actual_folder_name.lower()
-        print(f"[DEBUG loader] Dossier trouvé: {app_dir.name} → normalisé: {actual_folder_name} (code recherché: {app_code})")
+        logger.debug("loader: folder=%s normalized=%s", app_dir.name, actual_folder_name)
         
         # Construire le nom du module en utilisant le nom normalisé en minuscule
         if page_file.name == "__init__.py":
@@ -70,32 +72,30 @@ def get_application_page(app_name: str, app_code: str) -> Optional[Callable[[], 
         else:
             module_name = f"haleon.apps.{actual_folder_name}.page"
         
-        print(f"[DEBUG loader] Import du module: {module_name}")
+        logger.debug("loader: importing module %s", module_name)
         
         # Importer le module
         module = importlib.import_module(module_name)
-        print(f"[DEBUG loader] Module importé avec succès")
+        logger.debug("loader: module imported")
         
         # Chercher une fonction page() ou app_page()
         if hasattr(module, "page"):
             func = getattr(module, "page")
-            print(f"[DEBUG loader] ✓ Fonction page() trouvée")
+            logger.debug("loader: page() found")
             return func
         elif hasattr(module, "app_page"):
             func = getattr(module, "app_page")
-            print(f"[DEBUG loader] ✓ Fonction app_page() trouvée")
+            logger.debug("loader: app_page() found")
             return func
         elif hasattr(module, f"{app_code}_page"):
             func = getattr(module, f"{app_code}_page")
-            print(f"[DEBUG loader] ✓ Fonction {app_code}_page() trouvée")
+            logger.debug("loader: %s_page() found", app_code)
             return func
         
-        print(f"[DEBUG loader] ✗ Aucune fonction page() trouvée dans {module_name}")
+        logger.debug("loader: no page function found in %s", module_name)
         return None
     except (ImportError, AttributeError) as e:
-        print(f"[DEBUG loader] ✗ Erreur lors de l'import: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("loader: import error for %s: %s", app_code, e)
         return None
 
 

@@ -1,6 +1,7 @@
 """Page admin OOB - Gestion des accès utilisateur-vendor."""
 
 import reflex as rx
+import logging
 from haleon.auth.auth_state import AuthState
 from haleon.components.layout import layout
 from haleon.state.i18n_state import I18nState
@@ -22,6 +23,7 @@ from haleon.db.crud.users import get_all_users, get_user_by_session_id
 from haleon.db.model.users import Users
 from typing import Optional
 
+logger = logging.getLogger("haleon.apps.oob.admin.access")
 
 class OOBAccessAdminState(I18nState):
     """État pour la gestion des accès OOB utilisateur-vendor."""
@@ -229,9 +231,7 @@ class OOBAccessAdminState(I18nState):
                     else:
                         session_id_value = None
             except Exception as e:
-                print(f"[DEBUG] Erreur lors de la récupération du session_id: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.exception("Error reading session_id: %s", e)
                 session_id_value = None
             
             if session_id_value:
@@ -266,9 +266,7 @@ class OOBAccessAdminState(I18nState):
                 description=self.t_oob_access_granted_success_desc.replace("{email}", self.form_user_email).replace("{code}", self.form_vendor_code)
             )
         except Exception as e:
-            print(f"Erreur lors de l'ajout d'accès: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Add access error: %s", e)
             return rx.toast.error(
                 self.t_oob_error_adding_access,
                 description=self.t_oob_error_adding_access_desc.replace("{error}", str(e))
@@ -431,9 +429,7 @@ class OOBAccessAdminState(I18nState):
             self.load_vendors()  # Recharger aussi pour l'onglet accès
             self.hide_vendor_form()
         except Exception as e:
-            print(f"Erreur lors de la sauvegarde du vendor: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("Save vendor error: %s", e)
             rx.toast.error(
                 self.t_oob_error_saving_vendor,
                 description=self.t_oob_error_saving_vendor_desc.replace("{error}", str(e))

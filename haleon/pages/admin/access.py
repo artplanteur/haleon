@@ -60,6 +60,19 @@ class AccessAdminState(AuthState):
     
     def load_accesses(self):
         """Charge tous les accès depuis la BDD."""
+        # --- SERVER-SIDE ADMIN GATE (read access) ---
+        if not self.is_authenticated or not self.current_user:
+            self.load_user_from_session()
+        if not self.is_admin:
+            self.accesses = []
+            self.accesses_data = []
+            self.users = []
+            self.applications = []
+            self.users_lookup = []
+            self.applications_lookup = []
+            return self.show_unauthorized_toast()
+        # --- END GATE ---
+
         session_gen = get_session()
         session = next(session_gen)
         try:
@@ -96,6 +109,12 @@ class AccessAdminState(AuthState):
     
     def load_users(self):
         """Charge tous les utilisateurs."""
+        if not self.is_authenticated or not self.current_user:
+            self.load_user_from_session()
+        if not self.is_admin:
+            self.users = []
+            self.users_lookup = []
+            return
         session_gen = get_session()
         session = next(session_gen)
         try:
@@ -107,6 +126,12 @@ class AccessAdminState(AuthState):
     
     def load_applications(self):
         """Charge toutes les applications."""
+        if not self.is_authenticated or not self.current_user:
+            self.load_user_from_session()
+        if not self.is_admin:
+            self.applications = []
+            self.applications_lookup = []
+            return
         session_gen = get_session()
         session = next(session_gen)
         try:
@@ -118,6 +143,17 @@ class AccessAdminState(AuthState):
     
     def load_all(self):
         """Charge toutes les données."""
+        # Gate once here too (prevents any accidental reads).
+        if not self.is_authenticated or not self.current_user:
+            self.load_user_from_session()
+        if not self.is_admin:
+            self.accesses = []
+            self.accesses_data = []
+            self.users = []
+            self.applications = []
+            self.users_lookup = []
+            self.applications_lookup = []
+            return self.show_unauthorized_toast()
         self.load_accesses()
         self.load_users()
         self.load_applications()

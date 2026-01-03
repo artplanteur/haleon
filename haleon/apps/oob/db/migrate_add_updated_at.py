@@ -1,19 +1,18 @@
 """Migration pour ajouter la colonne updated_at à la table app_OOB_Comment."""
 
+import logging
 from haleon.db.database import get_session, DB_PATH, engine
 from sqlmodel import text
 from pathlib import Path
 
+logger = logging.getLogger("haleon.apps.oob.migrations")
 
 def migrate_add_updated_at():
     """Ajoute la colonne updated_at à la table app_OOB_Comment si elle n'existe pas."""
-    print(f"\n{'='*60}")
-    print("Migration: Ajout de la colonne updated_at à app_OOB_Comment")
-    print(f"Base de données: {DB_PATH}")
-    print(f"{'='*60}\n")
+    logger.info("Migration add updated_at to app_OOB_Comment (db=%s)", DB_PATH)
     
     if not DB_PATH.exists():
-        print("[ERREUR] Base de donnees non trouvee!")
+        logger.warning("DB not found, skipping migration.")
         return
     
     session_gen = get_session()
@@ -32,11 +31,11 @@ def migrate_add_updated_at():
         count = result[0] if isinstance(result, tuple) else (result.count if hasattr(result, 'count') else 0)
         
         if count > 0:
-            print("[OK] La colonne 'updated_at' existe deja dans la table app_OOB_Comment")
+            logger.debug("Column updated_at already exists in app_OOB_Comment")
             return
         
         # Ajouter la colonne updated_at
-        print("Ajout de la colonne 'updated_at'...")
+        logger.info("Adding column updated_at...")
         session.exec(
             text("""
                 ALTER TABLE app_OOB_Comment 
@@ -45,12 +44,10 @@ def migrate_add_updated_at():
         )
         session.commit()
         
-        print("[OK] Colonne 'updated_at' ajoutee avec succes a la table app_OOB_Comment")
+        logger.info("Column updated_at added to app_OOB_Comment")
         
     except Exception as e:
-        print(f"[ERREUR] Erreur lors de la migration: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception("Migration add updated_at failed: %s", e)
         session.rollback()
         raise
     finally:

@@ -1,6 +1,7 @@
 """État Reflex pour l'application OOB."""
 
 import reflex as rx
+import logging
 from typing import List, Optional, Any
 from datetime import datetime, timedelta
 from haleon.db.database import get_session
@@ -16,6 +17,7 @@ from haleon.apps.oob.schemas.pydantic import PurchasingItem
 from haleon.auth.auth_state import AuthState
 from haleon.auth.permissions import ApplicationPermissions
 
+logger = logging.getLogger("haleon.apps.oob.state")
 
 class OOBState(AuthState):
     """État pour l'application OOB - hérite de AuthState pour l'authentification."""
@@ -74,29 +76,32 @@ class OOBState(AuthState):
     
     def on_mount(self):
         """Charge les données au chargement de la page (comme dans les pages admin)."""
-        print("[DEBUG OOBState.on_mount] Début du chargement des données OOB")
+        logger.debug("OOBState.on_mount start")
         # S'assurer que l'utilisateur est chargé depuis la session (hérité de AuthState)
         if not self.is_authenticated or not self.current_user:
             self.load_user_from_session()
         
         # Vérifier que l'utilisateur a accès à l'application OOB
         if not self.current_user:
-            print("[DEBUG OOBState.on_mount] Aucun utilisateur connecté")
+            logger.debug("OOBState.on_mount: no current_user")
             self.has_oob_access = False
             return
         
         # DEBUG: Vérifier les valeurs de is_admin
-        print(f"[DEBUG OOBState.on_mount] is_admin (AuthState): {self.is_admin}")
-        print(f"[DEBUG OOBState.on_mount] current_user.is_admin (BDD): {self.current_user.is_admin if self.current_user else 'None'}")
-        print(f"[DEBUG OOBState.on_mount] is_authenticated: {self.is_authenticated}")
-        print(f"[DEBUG OOBState.on_mount] is_validated: {self.is_validated}")
-        print(f"[DEBUG OOBState.on_mount] is_active: {self.is_active}")
+        logger.debug(
+            "OOBState.on_mount auth=%s active=%s validated=%s admin=%s current_user_admin=%s",
+            self.is_authenticated,
+            self.is_active,
+            self.is_validated,
+            self.is_admin,
+            (self.current_user.is_admin if self.current_user else None),
+        )
         
         has_access = ApplicationPermissions.can_access_app(self.current_user, "oob")
         self.has_oob_access = has_access
         
         if not has_access:
-            print("[DEBUG OOBState.on_mount] Accès refusé à l'application OOB")
+            logger.debug("OOBState.on_mount: access denied")
             return
         
         # Initialiser les dates par défaut (30 derniers jours) SEULEMENT si elles ne sont pas déjà dans LocalStorage
@@ -117,18 +122,24 @@ class OOBState(AuthState):
         else:
             self.doc_types = []
         
-        print(f"[DEBUG OOBState.on_mount] Dates: {self.date_min} -> {self.date_max} (depuis LocalStorage ou défaut)")
-        print(f"[DEBUG OOBState.on_mount] Filtres restaurés - ship_from: '{self.ship_from}', ship_to: '{self.ship_to}', search: '{self.search_query}', doc_types: {self.doc_types}")
+        logger.debug("OOBState.on_mount dates=%s -> %s", self.date_min, self.date_max)
+        logger.debug(
+            "OOBState.on_mount filters ship_from=%s ship_to=%s search=%s doc_types=%s",
+            self.ship_from,
+            self.ship_to,
+            self.search_query,
+            self.doc_types,
+        )
         # Charger les items automatiquement (comme dans les pages admin)
         self.load_items()
-        print("[DEBUG OOBState.on_mount] Chargement des items terminé")
+        logger.debug("OOBState.on_mount load_items done")
         # Si une PO est déjà sélectionnée, charger ses commentaires
         if self.selected_po:
             self.load_comments()
     
     def load_items(self):
         """Charge les purchasing items depuis l'API simulée."""
-        print(f"[DEBUG load_items] Début du chargement - loading={self.loading}")
+        logger.debug("load_items start loading=%s", self.loading)
         self.loading = True
         
         # Obtenir une session pour récupérer les vendors
@@ -143,9 +154,9 @@ class OOBState(AuthState):
             if self.date_min:
                 try:
                     date_min_dt = datetime.strptime(self.date_min, "%Y-%m-%d")
-                    print(f"[DEBUG load_items] date_min_dt: {date_min_dt}")
+                    logger.debug("load_items date_min_dt=%s", date_min_dt)
                 except ValueError as e:
-                    print(f"[DEBUG load_items] Erreur parsing date_min: {e}")
+                    logger.debug("load_items date_min parse error: %s", e)
                     pass
             
             if self.date_max:
@@ -153,9 +164,9 @@ class OOBState(AuthState):
                     date_max_dt = datetime.strptime(self.date_max, "%Y-%m-%d")
                     # Ajouter un jour pour inclure toute la journée
                     date_max_dt = date_max_dt + timedelta(days=1)
-                    print(f"[DEBUG load_items] date_max_dt: {date_max_dt}")
+                    logger.debug("load_items date_max_dt=%s", date_max_dt)
                 except ValueError as e:
-                    print(f"[DEBUG load_items] Erreur parsing date_max: {e}")
+                    logger.debug("load_items date_max parse error: %s", e)
                     pass
             
             # Récupérer les vendors auxquels l'utilisateur a accès
@@ -164,9 +175,15 @@ class OOBState(AuthState):
                 from haleon.apps.oob.db.crud import get_vendors_for_user
                 user_vendors = get_vendors_for_user(session, self.current_user.id)
                 vendor_codes = [v.code for v in user_vendors]
-                print(f"[DEBUG load_items] Utilisateur a accès à {len(vendor_codes)} vendors: {vendor_codes}")
+                logger.debug("load_items vendor_codes=%s", vendor_codes)
             
-            print(f"[DEBUG load_items] Appel fetch_purchasing_items avec filtres: ship_from={self.ship_from}, ship_to={self.ship_to}, doc_types={self.doc_types}, vendor_codes={vendor_codes}")
+            logger.debug(
+                "load_items fetch ship_from=%s ship_to=%s doc_types=%s vendor_codes=%s",
+                self.ship_from,
+                self.ship_to,
+                self.doc_types,
+                vendor_codes,
+            )
             # Récupérer les items depuis l'API
             items = fetch_purchasing_items(
                 date_min=date_min_dt,
@@ -177,7 +194,7 @@ class OOBState(AuthState):
                 vendor_codes=vendor_codes if vendor_codes else None,
             )
             
-            print(f"[DEBUG load_items] {len(items)} items récupérés depuis l'API")
+            logger.debug("load_items fetched=%s", len(items))
             
             # Convertir les Pydantic models en dicts pour Reflex
             # Aplatir les données pour éviter les dictionnaires imbriqués (Reflex a du mal avec ça)
@@ -226,7 +243,7 @@ class OOBState(AuthState):
                 }
                 for item in items
             ]
-            print(f"[DEBUG load_items] {len(self.purchasing_items)} items chargés dans le state")
+            logger.debug("load_items loaded_in_state=%s", len(self.purchasing_items))
             
             # Filtrer les items selon les accès vendors de l'utilisateur
             if vendor_codes:
@@ -236,17 +253,19 @@ class OOBState(AuthState):
                     item for item in self.purchasing_items
                     if item.get("ShipFromLocationID") and item.get("ShipFromLocationID") in vendor_codes
                 ]
-                print(f"[DEBUG load_items] {len(self.purchasing_items)} items avant filtrage, {len(filtered_items)} après filtrage par vendor")
+                logger.debug(
+                    "load_items vendor_filter before=%s after=%s",
+                    len(self.purchasing_items),
+                    len(filtered_items),
+                )
                 self.purchasing_items = filtered_items
         except Exception as e:
-            print(f"Erreur lors du chargement des items: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("load_items error: %s", e)
             rx.toast.error(self.t("error_loading_data", module="oob"))
         finally:
             session.close()
             self.loading = False
-            print(f"[DEBUG load_items] Fin du chargement - loading={self.loading}")
+            logger.debug("load_items done loading=%s", self.loading)
     
     def select_po(self, doc_ext: str):
         """Sélectionne une PO et charge ses commentaires."""
@@ -264,7 +283,7 @@ class OOBState(AuthState):
         session = next(session_gen)
         try:
             comment_objs = get_comments_by_doc_ext(session, self.selected_po)
-            print(f"[DEBUG load_comments] PO sélectionnée: {self.selected_po}, {len(comment_objs)} commentaires trouvés")
+            logger.debug("load_comments selected_po=%s count=%s", self.selected_po, len(comment_objs))
             
             # Identifier les utilisateurs uniques dans l'ordre d'apparition
             seen_users = {}
@@ -324,11 +343,9 @@ class OOBState(AuthState):
                     "user_border_color": seen_users[c.username]["border_color"],
                 })
             
-            print(f"[DEBUG load_comments] Commentaires chargés: {len(self.comments)}, {len(seen_users)} utilisateurs uniques")
+            logger.debug("load_comments loaded=%s unique_users=%s", len(self.comments), len(seen_users))
         except Exception as e:
-            print(f"Erreur lors du chargement des commentaires: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("load_comments error: %s", e)
             self.comments = []
         finally:
             session.close()
@@ -377,9 +394,7 @@ class OOBState(AuthState):
             
             return rx.toast.success(self.t("comment_added_success", module="oob"))
         except Exception as e:
-            print(f"Erreur lors de l'ajout du commentaire: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("submit_comment error: %s", e)
             return rx.toast.error(self.t("error_adding_comment", module="oob"))
         finally:
             session.close()
@@ -458,9 +473,7 @@ class OOBState(AuthState):
             
             return rx.toast.success(self.t("comment_updated", module="oob"))
         except Exception as e:
-            print(f"Erreur lors de la modification du commentaire: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("edit_comment error: %s", e)
             return rx.toast.error(self.t("error_updating_comment", module="oob"))
         finally:
             session.close()
@@ -496,9 +509,7 @@ class OOBState(AuthState):
             
             return rx.toast.success(self.t("comment_deleted", module="oob"))
         except Exception as e:
-            print(f"Erreur lors de la suppression du commentaire: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception("delete_comment error: %s", e)
             return rx.toast.error(self.t("error_deleting_comment", module="oob"))
         finally:
             session.close()
@@ -580,8 +591,11 @@ class OOBState(AuthState):
     @rx.var
     def filtered_items(self) -> list[dict]:
         """Filtre les items selon la recherche et les trie."""
-        print(f"[DEBUG filtered_items] purchasing_items count: {len(self.purchasing_items) if self.purchasing_items else 0}")
-        print(f"[DEBUG filtered_items] search_query: '{self.search_query}'")
+        logger.debug(
+            "filtered_items purchasing_items=%s search_query=%s",
+            (len(self.purchasing_items) if self.purchasing_items else 0),
+            self.search_query,
+        )
         
         # Filtrer selon la recherche
         if not self.search_query:
@@ -620,18 +634,18 @@ class OOBState(AuthState):
             if key:
                 reverse = self.sort_direction == "desc"
                 items = sorted(items, key=lambda x: str(x.get(key, "")), reverse=reverse)
-                print(f"[DEBUG filtered_items] Trié par {self.sort_column} ({self.sort_direction})")
+                logger.debug("filtered_items sorted_by=%s direction=%s", self.sort_column, self.sort_direction)
         
-        print(f"[DEBUG filtered_items] Après filtrage et tri: {len(items)} items")
+        logger.debug("filtered_items after_filter_sort=%s", len(items))
         return items
     
     def _get_data_table_items_list(self) -> list[dict]:
         """Prépare les données pour le tableau avec les colonnes formatées (méthode helper)."""
         items = self.filtered_items
-        print(f"[DEBUG _get_data_table_items_list] filtered_items count: {len(items) if items else 0}")
+        logger.debug("_get_data_table_items_list filtered_items=%s", (len(items) if items else 0))
         
         if not items or len(items) == 0:
-            print("[DEBUG _get_data_table_items_list] Aucun item à formater")
+            logger.debug("_get_data_table_items_list: no items to format")
             return []
         
         # Créer une liste de dicts avec les clés correspondant aux colonnes du tableau
@@ -653,16 +667,15 @@ class OOBState(AuthState):
                 "Requirement Date": str(item.get("IBPPurgRequirementDateTimeFormatted", "")) or "",
             })
         
-        print(f"[DEBUG _get_data_table_items_list] {len(formatted_data)} items formatés pour le tableau")
+        logger.debug("_get_data_table_items_list formatted=%s", len(formatted_data))
         if len(formatted_data) > 0:
-            print(f"[DEBUG _get_data_table_items_list] Première ligne: {formatted_data[0]}")
-            print(f"[DEBUG _get_data_table_items_list] Clés de la première ligne: {list(formatted_data[0].keys())}")
+            logger.debug("_get_data_table_items_list first_row_keys=%s", list(formatted_data[0].keys()))
         return formatted_data
     
     def select_po_from_row(self, row_data: dict):
         """Sélectionne une PO depuis une ligne du tableau."""
         doc_ext = row_data.get("Doc Ext", "")
-        print(f"[DEBUG select_po_from_row] Sélection de PO: {doc_ext}")
+        logger.debug("select_po_from_row doc_ext=%s", doc_ext)
         if doc_ext:
             self.selected_po = doc_ext
             self.load_comments()
@@ -678,7 +691,7 @@ class OOBState(AuthState):
         """Vérifie si la liste contient des données."""
         items = self.data_table_items
         result = len(items) > 0 if items else False
-        print(f"[DEBUG has_data_table_items] items={len(items) if items else 0}, result={result}")
+        logger.debug("has_data_table_items items=%s result=%s", (len(items) if items else 0), result)
         return result
     
     @rx.var
@@ -750,7 +763,7 @@ class OOBState(AuthState):
         ]
         
         color_index = hash_int % len(colors)
-        print(f"[DEBUG get_user_border_color] Utilisateur: {username}, bordure: {colors[color_index]}")
+        logger.debug("get_user_border_color username=%s color=%s", username, colors[color_index])
         return colors[color_index]
 
 
