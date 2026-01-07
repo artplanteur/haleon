@@ -7,48 +7,18 @@ from haleon.auth.auth_state import AuthState
 class AvatarState(rx.State):
     """État pour gérer l'affichage du popup avatar."""
     show_popup: bool = False
-    timer_tick: int = 0  # Pour forcer la mise à jour du timer
     
     def toggle_popup(self):
         """Ouvre/ferme le popup."""
         self.show_popup = not self.show_popup
-        if self.show_popup:
-            # Démarrer le timer quand le popup s'ouvre
-            return AvatarState.start_timer()
     
     def close_popup(self):
         """Ferme le popup."""
         self.show_popup = False
-        return AvatarState.stop_timer()
     
     def set_show_popup(self, is_open: bool):
         """Met à jour l'état d'ouverture du popup."""
         self.show_popup = is_open
-        if not is_open:
-            return AvatarState.stop_timer()
-    
-    def start_timer(self):
-        """Démarre le timer pour mettre à jour le compte à rebours."""
-        return rx.call_script("""
-            if (window.avatarTimer) clearInterval(window.avatarTimer);
-            window.avatarTimer = setInterval(() => {
-                // Forcer une mise à jour en déclenchant un événement
-                window.dispatchEvent(new CustomEvent('avatar-timer-tick'));
-            }, 1000);
-        """)
-    
-    def stop_timer(self):
-        """Arrête le timer."""
-        return rx.call_script("""
-            if (window.avatarTimer) {
-                clearInterval(window.avatarTimer);
-                window.avatarTimer = null;
-            }
-        """)
-    
-    def update_timer(self):
-        """Met à jour le timer (appelé par l'événement JavaScript)."""
-        self.timer_tick += 1
 
 
 def avatar() -> rx.Component:
@@ -88,7 +58,7 @@ def avatar() -> rx.Component:
                         # Padding interne pour le contenu
                         # Header
                         rx.hstack(
-                            rx.heading("Informations utilisateur", size="6"),
+                            rx.heading(AuthState.t_user_info, size="6"),
                             rx.spacer(),
                             rx.button(
                                 "✕",
@@ -105,12 +75,12 @@ def avatar() -> rx.Component:
                         # Informations utilisateur
                         rx.vstack(
                             rx.hstack(
-                                rx.text("Email:", weight="bold", size="3"),
+                                rx.text(AuthState.t_email, weight="bold", size="3"),
                                 rx.text(
                                     rx.cond(
                                         AuthState.current_user,
                                         AuthState.current_user.email,
-                                        "N/A",
+                                        AuthState.t_na,
                                     ),
                                     size="3",
                                 ),
@@ -119,16 +89,16 @@ def avatar() -> rx.Component:
                                 padding_y="2",
                             ),
                             rx.hstack(
-                                rx.text("Prénom:", weight="bold", size="3"),
+                                rx.text(AuthState.t_first_name, weight="bold", size="3"),
                                 rx.text(
                                     rx.cond(
                                         AuthState.current_user,
                                         rx.cond(
                                             AuthState.current_user.first_name,
                                             AuthState.current_user.first_name,
-                                            "N/A",
+                                            AuthState.t_na,
                                         ),
-                                        "N/A",
+                                        AuthState.t_na,
                                     ),
                                     size="3",
                                 ),
@@ -137,16 +107,16 @@ def avatar() -> rx.Component:
                                 padding_y="2",
                             ),
                             rx.hstack(
-                                rx.text("Nom:", weight="bold", size="3"),
+                                rx.text(AuthState.t_last_name, weight="bold", size="3"),
                                 rx.text(
                                     rx.cond(
                                         AuthState.current_user,
                                         rx.cond(
                                             AuthState.current_user.family_name,
                                             AuthState.current_user.family_name,
-                                            "N/A",
+                                            AuthState.t_na,
                                         ),
-                                        "N/A",
+                                        AuthState.t_na,
                                     ),
                                     size="3",
                                 ),
@@ -155,7 +125,7 @@ def avatar() -> rx.Component:
                                 padding_y="2",
                             ),
                             rx.hstack(
-                                rx.text("Pays:", weight="bold", size="3"),
+                                rx.text(AuthState.t_country, weight="bold", size="3"),
                                 rx.hstack(
                                     rx.text(
                                         rx.cond(
@@ -163,9 +133,9 @@ def avatar() -> rx.Component:
                                             rx.cond(
                                                 AuthState.current_user.country,
                                                 AuthState.current_user.country,
-                                                "N/A",
+                                                AuthState.t_na,
                                             ),
-                                            "N/A",
+                                            AuthState.t_na,
                                         ),
                                         size="3",
                                     ),
@@ -175,7 +145,7 @@ def avatar() -> rx.Component:
                                             AuthState.current_user.country,
                                             rx.image(
                                                 src="https://flagsapi.com/" + AuthState.current_user.country + "/shiny/32.png",
-                                                alt="Country flag",
+                                                alt="",
                                                 width="20px",
                                                 height="20px",
                                                 border_radius="4px",
@@ -200,7 +170,7 @@ def avatar() -> rx.Component:
                                     rx.cond(
                                         AuthState.is_active,
                                         rx.badge(
-                                            "Actif",
+                                            AuthState.t_active,
                                             color_scheme="green",
                                             size="2",
                                         ),
@@ -209,7 +179,7 @@ def avatar() -> rx.Component:
                                     rx.cond(
                                         AuthState.is_validated,
                                         rx.badge(
-                                            "Validé",
+                                            AuthState.t_validated,
                                             color_scheme="blue",
                                             size="2",
                                         ),
@@ -218,7 +188,7 @@ def avatar() -> rx.Component:
                                     rx.cond(
                                         AuthState.is_admin,
                                         rx.badge(
-                                            "Admin",
+                                            AuthState.t_admin,
                                             color_scheme="purple",
                                             size="2",
                                         ),
@@ -233,7 +203,7 @@ def avatar() -> rx.Component:
                             rx.divider(),
                             # Temps restant de session (compte à rebours live) - selon README
                             rx.hstack(
-                                rx.text("Temps restant:", weight="bold", size="3"),
+                                rx.text(AuthState.t_remaining_time, weight="bold", size="3"),
                                 rx.text(
                                     AuthState.get_session_remaining_formatted,
                                     size="4",
@@ -249,30 +219,42 @@ def avatar() -> rx.Component:
                             # Timer JavaScript pour mettre à jour le compte à rebours en temps réel
                             rx.box(
                                 on_mount=rx.call_script("""
-                                    if (window.avatarTimer) clearInterval(window.avatarTimer);
-                                    const display = document.getElementById('session-timer-display');
-                                    if (display) {
-                                        const initialText = display.textContent;
-                                        let [minutes, seconds] = initialText.split(':').map(Number);
-                                        let totalSeconds = minutes * 60 + seconds;
-                                        
-                                        function updateTimer() {
-                                            if (totalSeconds > 0) {
-                                                totalSeconds--;
-                                                const m = Math.floor(totalSeconds / 60);
-                                                const s = totalSeconds % 60;
-                                                display.textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
-                                            } else {
-                                                display.textContent = '00:00';
-                                                if (window.avatarTimer) {
-                                                    clearInterval(window.avatarTimer);
-                                                    window.avatarTimer = null;
-                                                }
-                                            }
+                                    (function () {
+                                      const display = document.getElementById('session-timer-display');
+                                      if (!display) return;
+
+                                      // IMPORTANT: le timer doit refléter la session, pas se "reset" quand on rouvre l'avatar.
+                                      // On stocke une expiration globale (dans la page) et on ne la réinitialise pas à l'ouverture.
+                                      if (!window.haleonSessionExpiryMs) {
+                                        const initialText = (display.textContent || "").trim();
+                                        let totalSeconds = 0;
+                                        const parts = initialText.split(":");
+                                        if (parts.length === 2) {
+                                          const m = parseInt(parts[0], 10);
+                                          const s = parseInt(parts[1], 10);
+                                          if (!isNaN(m) && !isNaN(s)) totalSeconds = (m * 60 + s);
                                         }
-                                        updateTimer();
-                                        window.avatarTimer = setInterval(updateTimer, 1000);
-                                    }
+                                        window.haleonSessionExpiryMs = Date.now() + (totalSeconds * 1000);
+                                      }
+
+                                      function fmt(sec) {
+                                        const m = Math.floor(sec / 60);
+                                        const s = sec % 60;
+                                        return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+                                      }
+
+                                      function tick() {
+                                        const d = document.getElementById('session-timer-display');
+                                        if (!d) return; // popup fermé
+                                        const remaining = Math.max(0, Math.floor((window.haleonSessionExpiryMs - Date.now()) / 1000));
+                                        d.textContent = fmt(remaining);
+                                      }
+
+                                      // Stop any previous interval for the avatar popup, but keep the expiry timestamp.
+                                      if (window.avatarTimer) clearInterval(window.avatarTimer);
+                                      tick();
+                                      window.avatarTimer = setInterval(tick, 1000);
+                                    })();
                                 """),
                                 on_unmount=rx.call_script("""
                                     if (window.avatarTimer) {
@@ -289,7 +271,7 @@ def avatar() -> rx.Component:
                         rx.divider(),
                         # Bouton de déconnexion
                         rx.button(
-                            "Déconnexion",
+                            AuthState.t_logout,
                             on_click=[
                                 AvatarState.close_popup,
                                 AuthState.logout,

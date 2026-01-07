@@ -573,6 +573,11 @@ def page() -> rx.Component:
         )
     
     return rx.fragment(
+        # Initialiser + charger les données uniquement quand on arrive sur la page OOB
+        rx.cond(
+            OOBState.is_authenticated,
+            rx.box(on_mount=OOBState.on_page_mount),
+        ),
         # Rediriger si non authentifié
         rx.cond(
             ~OOBState.is_authenticated,

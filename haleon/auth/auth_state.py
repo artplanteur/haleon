@@ -170,7 +170,6 @@ class AuthState(I18nState):
                 self.is_authenticated = bool(user_view and user_view.is_connected)
                 # Pour l'UI: compte à rebours basé sur le dernier "seen".
                 self.session_start_time = (user_view.last_seen_at if user_view else None) or now
-                
                 # Mettre à jour les permissions
                 self.is_active = UserPermissions.is_active_user(user_view) if user_view else False
                 self.is_validated = UserPermissions.is_validated_user(user_view) if user_view else False

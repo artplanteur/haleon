@@ -207,12 +207,25 @@ def fetch_purchasing_items(
     vendor_codes: Optional[List[str]] = None,
 ) -> List[PurchasingItem]:
     """Fetch PurchasingItem list from the real API; fallback to simulated data."""
+    # Security: if the caller provides vendor_codes but it's empty, never fetch anything.
+    # (OOBState blocks earlier; this is a defensive guard.)
+    if vendor_codes is not None and len(vendor_codes) == 0:
+        return []
+
     if _real_api_configured():
         try:
             api = Purchasing()
 
             # Try to load nested doc item in a single call if supported by the service.
             params: dict[str, Any] = {"$expand": "IBPPurgDocItem"}
+
+            # Best-effort server-side vendor scoping (OData $filter) when supported.
+            # Goal: avoid loading other vendors into the backend process.
+            if vendor_codes:
+                codes = sorted({str(c).strip().upper() for c in vendor_codes if str(c).strip()})
+                if codes:
+                    vendor_filter = " or ".join([f"ShipFromLocationID eq '{c}'" for c in codes])
+                    params["$filter"] = f"({vendor_filter})"
             raw = api.fetch(PURCHASING_ITEMS_RESOURCE, params=params, page_size=5000)
 
             parsed: List[PurchasingItem] = []
@@ -240,7 +253,12 @@ def fetch_purchasing_items(
             if doc_types:
                 items = [it for it in items if it.IBPPurgDocItem.IBPPurgDocType in doc_types]
             if vendor_codes:
-                items = [it for it in items if it.ShipFromLocationID and it.ShipFromLocationID in vendor_codes]
+                codes = {str(c).strip().upper() for c in vendor_codes if str(c).strip()}
+                items = [
+                    it
+                    for it in items
+                    if it.ShipFromLocationID and it.ShipFromLocationID.strip().upper() in codes
+                ]
 
             return items
         except Exception as e:

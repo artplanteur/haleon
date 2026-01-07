@@ -75,7 +75,11 @@ class OOBState(AuthState):
         ]
     
     def on_mount(self):
-        """Charge les données au chargement de la page (comme dans les pages admin)."""
+        """Initialise l'état OOB (auth, accès, filtres) sans charger de données API.
+
+        Sécurité/perf: l'appel API doit se faire à l'arrivée sur la page OOB (on_page_mount),
+        pas au démarrage global de l'application.
+        """
         logger.debug("OOBState.on_mount start")
         # S'assurer que l'utilisateur est chargé depuis la session (hérité de AuthState)
         if not self.is_authenticated or not self.current_user:
@@ -130,10 +134,20 @@ class OOBState(AuthState):
             self.search_query,
             self.doc_types,
         )
-        # Charger les items automatiquement (comme dans les pages admin)
+
+    def on_page_mount(self):
+        """Handler de page: initialise puis charge les données à l'arrivée sur la page OOB."""
+        # Init (auth/access/filtres)
+        self.on_mount()
+
+        # Si pas d'accès, ne pas charger de données.
+        if not self.has_oob_access:
+            return
+
+        # Charger les items uniquement à l'arrivée sur la page OOB.
         self.load_items()
-        logger.debug("OOBState.on_mount load_items done")
-        # Si une PO est déjà sélectionnée, charger ses commentaires
+
+        # Si une PO est déjà sélectionnée (via LocalStorage / navigation), charger ses commentaires.
         if self.selected_po:
             self.load_comments()
     
@@ -169,13 +183,23 @@ class OOBState(AuthState):
                     logger.debug("load_items date_max parse error: %s", e)
                     pass
             
-            # Récupérer les vendors auxquels l'utilisateur a accès
-            vendor_codes = []
+            # Récupérer les vendors auxquels l'utilisateur a accès (via admin/roles OOB).
+            # Sécurité: si aucun vendor n'est attribué, ne rien charger (et ne pas appeler l'API).
+            vendor_codes: list[str] = []
             if self.current_user:
                 from haleon.apps.oob.db.crud import get_vendors_for_user
+
                 user_vendors = get_vendors_for_user(session, self.current_user.id)
-                vendor_codes = [v.code for v in user_vendors]
+                # Normaliser en uppercase pour matcher ShipFromLocationID (souvent en majuscules côté API)
+                vendor_codes = [str(v.code or "").strip().upper() for v in user_vendors if str(v.code or "").strip()]
                 logger.debug("load_items vendor_codes=%s", vendor_codes)
+
+                # IMPORTANT: si aucun vendor n'est attribué, l'utilisateur ne doit rien voir.
+                if not vendor_codes:
+                    logger.debug("load_items blocked: user has no vendor access (returning empty list).")
+                    self.purchasing_items = []
+                    self.loading = False
+                    return
             
             logger.debug(
                 "load_items fetch ship_from=%s ship_to=%s doc_types=%s vendor_codes=%s",
@@ -245,20 +269,18 @@ class OOBState(AuthState):
             ]
             logger.debug("load_items loaded_in_state=%s", len(self.purchasing_items))
             
-            # Filtrer les items selon les accès vendors de l'utilisateur
-            if vendor_codes:
-                # Filtrer pour ne garder que les items dont ShipFromLocationID correspond à un vendor auquel l'utilisateur a accès
-                # Exclure les items sans vendor (ShipFromLocationID vide ou None)
-                filtered_items = [
-                    item for item in self.purchasing_items
-                    if item.get("ShipFromLocationID") and item.get("ShipFromLocationID") in vendor_codes
-                ]
-                logger.debug(
-                    "load_items vendor_filter before=%s after=%s",
-                    len(self.purchasing_items),
-                    len(filtered_items),
-                )
-                self.purchasing_items = filtered_items
+            # Filtre défensif (même si l'API a déjà filtré) pour garantir la sécurité côté serveur.
+            filtered_items = [
+                item
+                for item in self.purchasing_items
+                if (item.get("ShipFromLocationID") or "").strip().upper() in vendor_codes
+            ]
+            logger.debug(
+                "load_items vendor_filter before=%s after=%s",
+                len(self.purchasing_items),
+                len(filtered_items),
+            )
+            self.purchasing_items = filtered_items
         except Exception as e:
             logger.exception("load_items error: %s", e)
             rx.toast.error(self.t("error_loading_data", module="oob"))

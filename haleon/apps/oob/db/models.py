@@ -16,7 +16,7 @@ class OOBVendor(SQLModel, table=True):
     __tablename__ = "app_OOB_Vendor"
     
     id: Optional[int] = Field(default=None, primary_key=True)
-    code: str = Field(max_length=5, unique=True, index=True, description="Code vendor sur 5 lettres")
+    code: str = Field(max_length=10, unique=True, index=True, description="Code vendor (max 10 caractères)")
     description: Optional[str] = Field(default=None, description="Description du vendor")
 
 

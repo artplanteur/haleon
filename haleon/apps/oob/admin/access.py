@@ -398,7 +398,7 @@ class OOBAccessAdminState(I18nState):
                         description=self.t_oob_code_required_desc
                     )
                 
-                if len(self.form_vendor_code.strip()) > 5:
+                if len(self.form_vendor_code.strip()) > 10:
                     return rx.toast.error(
                         self.t_oob_code_invalid,
                         description=self.t_oob_code_invalid_desc
@@ -708,7 +708,7 @@ def oob_access_admin_page() -> rx.Component:
                             # Formulaire
                             rx.vstack(
                                 rx.vstack(
-                                    rx.text("Code (max 5 caractères)", size="2", color="gray", weight="medium"),
+                                    rx.text("Code (max 10 caractères)", size="2", color="gray", weight="medium"),
                                     rx.cond(
                                         OOBAccessAdminState.editing_vendor_id,
                                         # Mode édition : code en lecture seule
@@ -726,7 +726,7 @@ def oob_access_admin_page() -> rx.Component:
                                             on_change=OOBAccessAdminState.set_form_vendor_code,
                                             width="100%",
                                             size="3",
-                                            max_length=5,
+                                            max_length=10,
                                         ),
                                     ),
                                     spacing="1",
