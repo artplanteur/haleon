@@ -137,7 +137,7 @@ _DEFAULTS: dict[str, dict[str, str]] = {
 
 
 def _load_en_keys_for_module(module: str) -> list[str]:
-    """Load keys from locale/en/<module>.json to auto-generate t_* vars."""
+    """(Deprecated) Kept for backward compatibility; use `_collect_keys_by_module()`."""
     try:
         base_dir = Path(__file__).parent.parent.parent
         p = base_dir / "locale" / "en" / f"{module}.json"
@@ -148,6 +148,45 @@ def _load_en_keys_for_module(module: str) -> list[str]:
         return [k for k in data.keys() if isinstance(k, str) and _VALID_KEY_RE.match(k)]
     except Exception:
         return []
+
+
+def _load_keys_from_json(path: Path) -> list[str]:
+    """Load translation keys from a JSON file, filtering invalid identifiers."""
+    try:
+        if not path.exists():
+            return []
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f) or {}
+        if not isinstance(data, dict):
+            return []
+        return [k for k in data.keys() if isinstance(k, str) and _VALID_KEY_RE.match(k)]
+    except Exception:
+        return []
+
+
+def _collect_keys_by_module() -> dict[str, list[str]]:
+    """Collect the union of keys across ALL locales for each module.
+
+    This makes the `t_*` API stable even if a key exists only in e.g. `fr/common.json`
+    and was forgotten in `en/common.json`.
+    """
+    base_dir = Path(__file__).parent.parent.parent
+    locale_root = base_dir / "locale"
+    if not locale_root.exists():
+        return {}
+
+    acc: dict[str, set[str]] = {}
+    for locale_dir in locale_root.iterdir():
+        if not locale_dir.is_dir():
+            continue
+        for json_file in locale_dir.glob("*.json"):
+            module = json_file.stem
+            keys = _load_keys_from_json(json_file)
+            if not keys:
+                continue
+            acc.setdefault(module, set()).update(keys)
+
+    return {module: sorted(keys) for module, keys in acc.items()}
 
 
 def _make_t_var(key: str, module: str = "common", default: Optional[str] = None):
@@ -161,19 +200,12 @@ def _make_t_var(key: str, module: str = "common", default: Optional[str] = None)
 
 
 def _install_translation_vars():
-    """Install t_* vars on I18nState from locale/en/*.json keys."""
-    base_dir = Path(__file__).parent.parent.parent
-    locale_en_dir = base_dir / "locale" / "en"
-    if not locale_en_dir.exists():
+    """Install t_* vars on I18nState from the union of locale/*/*.json keys."""
+    keys_by_module = _collect_keys_by_module()
+    if not keys_by_module:
         return
 
-    modules = [p.stem for p in locale_en_dir.glob("*.json")]
-
-    for module in modules:
-        keys = _load_en_keys_for_module(module)
-        if not keys:
-            continue
-
+    for module, keys in keys_by_module.items():
         for key in keys:
             # Naming convention:
             # - common: t_<key>
