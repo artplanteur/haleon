@@ -1,5 +1,6 @@
 import reflex as rx
 from .avatar import avatar
+from haleonv3.state.auth_state import AuthState
 
 
 def navbar() -> rx.Component:
@@ -13,7 +14,12 @@ def navbar() -> rx.Component:
             href="/",
         ),
         rx.spacer(),
-        avatar(),
+        rx.color_mode.button(),
+        rx.cond(
+            AuthState.is_authenticated,
+            avatar(),
+            rx.box(),
+        ),
         padding="0.75rem 1rem",
         border_bottom="1px solid #eee",
         align_items="center",

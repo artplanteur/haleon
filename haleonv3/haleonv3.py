@@ -11,8 +11,15 @@ class State(rx.State):
 def index() -> rx.Component:
     return layout(
         rx.container(
-            rx.heading("Homepage", size="7"),
-            rx.text("Bienvenue dans Haleon."),
+            rx.center(
+                rx.vstack(
+                    rx.heading("Homepage", size="7"),
+                    rx.text("Bienvenue dans Haleon."),
+                    rx.button("Se connecter", size="3"),
+                    spacing="4",
+                ),
+                min_height="70vh",
+            )
         )
     )
 
