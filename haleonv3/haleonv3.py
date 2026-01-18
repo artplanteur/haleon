@@ -14,8 +14,11 @@ def index() -> rx.Component:
             rx.center(
                 rx.vstack(
                     rx.heading("Homepage", size="7"),
-                    rx.text("Bienvenue dans Haleon."),
-                    rx.button("Se connecter", size="3"),
+                    rx.text("Welcome to Haleon."),
+                    rx.link(
+                        rx.button("Connect", size="3"),
+                        href="/auth/login",
+                    ),
                     spacing="4",
                 ),
                 min_height="70vh",
