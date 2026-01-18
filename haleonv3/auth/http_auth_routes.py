@@ -10,14 +10,19 @@ from haleonv3.db.crud.users import upsert_user_from_claims
 sso = SSO()
 
 
-def auth_login():
+def auth_login(request):
     url, _state = sso.get_authorization_url()
     if not url:
         return PlainTextResponse("SSO error", status_code=500)
     return RedirectResponse(url)
 
 
-def auth_callback(code: str, state: str):
+def auth_callback(request):
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")
+    if not code or not state:
+        return PlainTextResponse("Missing code/state", status_code=400)
+
     if not sso.validate_state(state):
         return PlainTextResponse("Invalid state", status_code=400)
 
