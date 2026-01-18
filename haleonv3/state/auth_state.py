@@ -4,6 +4,7 @@ from sqlmodel import select
 
 from haleonv3.db.database import get_session
 from haleonv3.db.model.users import Users
+from haleonv3.auth.permissions import UserPermissions
 
 
 class AuthState(rx.State):
@@ -15,14 +16,9 @@ class AuthState(rx.State):
     given_name: str = ""
     family_name: str = ""
     country: str = ""
-
-    def load_from_claims(self, claims: dict):
-        self.immutable_id = claims.get("immutable_id", "")
-        self.email = claims.get("email", "")
-        self.given_name = claims.get("given_name", "")
-        self.family_name = claims.get("family_name", "")
-        self.country = claims.get("country", "")
-        self.is_authenticated = True
+    is_active: bool = False
+    is_validated: bool = False
+    is_admin: bool = False
 
     def load_me(self):
         headers = (self.router_data or {}).get("headers") or {}
@@ -49,6 +45,9 @@ class AuthState(rx.State):
         self.family_name = user.family_name or ""
         self.country = user.country or ""
         self.is_authenticated = True
+        self.is_active = UserPermissions.is_active_user(user)
+        self.is_validated = UserPermissions.is_validated_user(user)
+        self.is_admin = UserPermissions.is_admin_user(user)
 
     def logout(self):
         self.is_authenticated = False
@@ -57,6 +56,9 @@ class AuthState(rx.State):
         self.given_name = ""
         self.family_name = ""
         self.country = ""
+        self.is_active = False
+        self.is_validated = False
+        self.is_admin = False
 
     @rx.var
     def initials(self) -> str:
