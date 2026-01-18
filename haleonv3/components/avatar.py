@@ -14,10 +14,15 @@ class AvatarState(rx.State):
 
 def avatar() -> rx.Component:
     return rx.box(
-        rx.avatar(
-            name=AuthState.initials,
-            size="3",
+        rx.button(
+            rx.avatar(
+                name=AuthState.initials,
+                size="3",
+                radius="full",
+            ),
             on_click=AvatarState.open_popup,
+            variant="ghost",
+            padding="0",
         ),
         rx.cond(
             AvatarState.show_popup,
