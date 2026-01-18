@@ -3,6 +3,7 @@
 import reflex as rx
 from haleonv3.components.layout import layout
 from haleonv3.auth.http_auth_routes import mount_http_auth_routes
+from haleonv3.state.auth_state import AuthState
 
 
 class State(rx.State):
@@ -16,9 +17,13 @@ def index() -> rx.Component:
                 rx.vstack(
                     rx.heading("Homepage", size="7"),
                     rx.text("Welcome to Haleon."),
-                    rx.link(
-                        rx.button("Connect", size="3"),
-                        href="/auth/login",
+                    rx.cond(
+                        AuthState.is_authenticated,
+                        rx.text("You're connected."),
+                        rx.link(
+                            rx.button("Connect", size="3"),
+                            href="/auth/login",
+                        ),
                     ),
                     spacing="4",
                 ),
