@@ -66,3 +66,15 @@ class AuthState(rx.State):
         if not g and not f:
             return "U"
         return (g[:1] + f[:1]).upper()
+
+    @rx.var
+    def can_active(self) -> bool:
+        return self.is_active
+
+    @rx.var
+    def can_validated(self) -> bool:
+        return self.can_active and self.is_validated
+
+    @rx.var
+    def can_admin(self) -> bool:
+        return self.can_validated and self.is_admin
