@@ -2,6 +2,7 @@
 
 import reflex as rx
 from haleonv3.components.layout import layout
+from haleonv3.auth.http_auth_routes import mount_http_auth_routes
 
 
 class State(rx.State):
@@ -28,4 +29,5 @@ def index() -> rx.Component:
 
 
 app = rx.App()
+mount_http_auth_routes(app._api)
 app.add_page(index, route="/")
