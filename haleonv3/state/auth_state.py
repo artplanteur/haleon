@@ -4,7 +4,6 @@ from sqlmodel import select
 
 from haleonv3.db.database import get_session
 from haleonv3.db.model.users import Users
-from haleonv3.auth.permissions import UserPermissions
 
 
 class AuthState(rx.State):
@@ -45,9 +44,9 @@ class AuthState(rx.State):
         self.family_name = user.family_name or ""
         self.country = user.country or ""
         self.is_authenticated = True
-        self.is_active = UserPermissions.is_active_user(user)
-        self.is_validated = UserPermissions.is_validated_user(user)
-        self.is_admin = UserPermissions.is_admin_user(user)
+        self.is_active = bool(user.is_active)
+        self.is_validated = bool(user.is_validated)
+        self.is_admin = bool(user.is_admin)
 
     def logout(self):
         self.is_authenticated = False
