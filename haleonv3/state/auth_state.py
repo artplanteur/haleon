@@ -1,4 +1,9 @@
 import reflex as rx
+from http.cookies import SimpleCookie
+from sqlmodel import select
+
+from haleonv3.db.database import get_session
+from haleonv3.db.model.users import Users
 
 
 class AuthState(rx.State):
@@ -20,7 +25,30 @@ class AuthState(rx.State):
         self.is_authenticated = True
 
     def load_me(self):
-        return rx.call_api("/auth/me", self.load_from_claims)
+        headers = (self.router_data or {}).get("headers") or {}
+        cookie_header = headers.get("cookie") or ""
+        if not cookie_header:
+            return
+
+        c = SimpleCookie()
+        c.load(cookie_header)
+        session_id = c.get("session_id").value if c.get("session_id") else None
+        if not session_id:
+            return
+
+        with next(get_session()) as session:
+            user = session.exec(
+                select(Users).where(Users.session_id == session_id)
+            ).first()
+            if not user:
+                return
+
+        self.immutable_id = user.immutable_id or ""
+        self.email = user.email or ""
+        self.given_name = user.given_name or ""
+        self.family_name = user.family_name or ""
+        self.country = user.country or ""
+        self.is_authenticated = True
 
     def logout(self):
         self.is_authenticated = False
