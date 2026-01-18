@@ -14,12 +14,12 @@ def navbar() -> rx.Component:
             href="/",
         ),
         rx.spacer(),
-        rx.color_mode.button(),
         rx.cond(
             AuthState.is_authenticated,
             avatar(),
             rx.box(),
         ),
+        rx.color_mode.button(),
         padding="0.75rem 1rem",
         border_bottom="1px solid #eee",
         align_items="center",
