@@ -12,6 +12,7 @@ class Users(SQLModel, table=True):
     given_name: Optional[str] = Field(default=None)
     family_name: Optional[str] = Field(default=None)
     country: Optional[str] = Field(default=None)
+    session_id: Optional[str] = Field(default=None, index=True)
 
     is_active: bool = Field(default=False)
     is_validated: bool = Field(default=False)
