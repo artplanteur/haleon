@@ -6,7 +6,6 @@ from haleonv3.state.auth_state import AuthState
 
 def layout(content: rx.Component) -> rx.Component:
     return rx.box(
-        on_mount=AuthState.load_me,
         navbar(),
         rx.box(
             content,
@@ -19,4 +18,5 @@ def layout(content: rx.Component) -> rx.Component:
         display="flex",
         flex_direction="column",
         width="100%",
+        on_mount=AuthState.load_me,
     )
