@@ -9,7 +9,7 @@ class Users(SQLModel, table=True):
     immutable_id: str = Field(max_length=20, index=True, unique=True)
 
     email: Optional[str] = Field(default=None)
-    first_name: Optional[str] = Field(default=None)
+    given_name: Optional[str] = Field(default=None)
     family_name: Optional[str] = Field(default=None)
     country: Optional[str] = Field(default=None)
 
