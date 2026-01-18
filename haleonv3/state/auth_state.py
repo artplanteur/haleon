@@ -19,6 +19,9 @@ class AuthState(rx.State):
         self.country = claims.get("country", "")
         self.is_authenticated = True
 
+    def load_me(self):
+        return rx.call_api("/auth/me", self.load_from_claims)
+
     def logout(self):
         self.is_authenticated = False
         self.immutable_id = ""

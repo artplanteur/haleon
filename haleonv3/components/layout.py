@@ -1,10 +1,12 @@
 import reflex as rx
 from .navbar import navbar
 from .footer import footer
+from haleonv3.state.auth_state import AuthState
 
 
 def layout(content: rx.Component) -> rx.Component:
     return rx.box(
+        on_mount=AuthState.load_me,
         navbar(),
         rx.box(
             content,
