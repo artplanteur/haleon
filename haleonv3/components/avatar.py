@@ -12,20 +12,10 @@ class AvatarState(rx.State):
         self.show_popup = False
 
 
-def _initials(given_name: str, family_name: str) -> str:
-    g = (given_name or "").strip()
-    f = (family_name or "").strip()
-    if not g and not f:
-        return "U"
-    return (g[:1] + f[:1]).upper()
-
-
 def avatar() -> rx.Component:
-    initials = _initials(AuthState.given_name, AuthState.family_name)
-
     return rx.box(
         rx.avatar(
-            name=initials,
+            name=AuthState.initials,
             size="3",
             on_click=AvatarState.open_popup,
         ),

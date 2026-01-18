@@ -26,3 +26,11 @@ class AuthState(rx.State):
         self.given_name = ""
         self.family_name = ""
         self.country = ""
+
+    @rx.var
+    def initials(self) -> str:
+        g = (self.given_name or "").strip()
+        f = (self.family_name or "").strip()
+        if not g and not f:
+            return "U"
+        return (g[:1] + f[:1]).upper()
