@@ -11,12 +11,16 @@ def oob_page() -> rx.Component:
                 AuthState.can_validated,
                 rx.vstack(
                     rx.heading("OOB App", size="7"),
-                    rx.data_table(
-                        data=OOBState.rows,
-                        columns=["po", "vendor", "amount", "status"],
-                        search=True,
-                        sort=True,
-                        pagination=True,
+                    rx.cond(
+                        OOBState.is_loading,
+                        rx.spinner(size="4"),
+                        rx.data_table(
+                            data=OOBState.rows,
+                            columns=["po", "vendor", "amount", "status"],
+                            search=True,
+                            sort=True,
+                            pagination=True,
+                        ),
                     ),
                     spacing="4",
                 ),
