@@ -1,30 +1,39 @@
 import reflex as rx
-from haleonv3.components.layout import layout
-from haleonv3.state.auth_state import AuthState
 from haleonv3.apps.oob.state import OOBState
 
 
 def oob_page() -> rx.Component:
-    return layout(
-        rx.container(
+    return rx.box(
+        rx.vstack(
             rx.cond(
-                AuthState.can_validated,
+                OOBState.is_loading,
                 rx.vstack(
-                    rx.heading("OOB App", size="7"),
-                    rx.cond(
-                        OOBState.is_loading,
-                        rx.spinner(size="4"),
-                        rx.data_table(
-                            data=OOBState.rows,
-                            columns=["po", "vendor", "amount", "status"],
-                            search=True,
-                            sort=True,
-                            pagination=True,
-                        ),
+                    rx.hstack(
+                        rx.text("Chargement :"),
+                        rx.text(OOBState.progress, font_weight="bold"),
+                        rx.text("%", font_weight="bold"),
+                        spacing="2",
                     ),
-                    spacing="4",
+                    rx.progress(
+                        value=OOBState.progress,
+                        max=100,
+                        width="100%",
+                    ),
+                    width="100%",
+                    spacing="3",
                 ),
-                rx.text("Access denied: validated users only."),
-            )
-        )
+                rx.data_table(
+                    data=OOBState.rows,
+                    columns=["po", "vendor", "amount", "status"],
+                    search=True,
+                    sort=True,
+                    pagination=True,
+                    width="100%",
+                ),
+            ),
+            spacing="4",
+            width="100%",
+        ),
+        on_mount=OOBState.load_oob_data,
+        width="100%",
     )
