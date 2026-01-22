@@ -14,6 +14,7 @@ def layout(content: rx.Component) -> rx.Component:
             padding="1rem",
         ),
         footer(),
+        rx.toast.provider(),
         min_height="100vh",
         display="flex",
         flex_direction="column",

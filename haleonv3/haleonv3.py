@@ -5,6 +5,7 @@ from haleonv3.components.layout import layout
 from haleonv3.auth.http_auth_routes import mount_http_auth_routes
 from haleonv3.state.auth_state import AuthState
 from haleonv3.apps.oob.page import oob_page
+from haleonv3.pages.admin import admin_page
 
 
 class State(rx.State):
@@ -38,3 +39,4 @@ app = rx.App()
 mount_http_auth_routes(app._api)
 app.add_page(index, route="/")
 app.add_page(oob_page, route="/apps/oob")
+app.add_page(admin_page, route="/admin")

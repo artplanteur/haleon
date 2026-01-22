@@ -16,7 +16,16 @@ def navbar() -> rx.Component:
         rx.spacer(),
         rx.cond(
             AuthState.is_authenticated,
-            avatar(),
+            rx.hstack(
+                rx.cond(
+                    AuthState.can_admin,
+                    rx.link(rx.button("Admin", size="2"), href="/admin"),
+                    rx.box(),
+                ),
+                avatar(),
+                spacing="3",
+                align_items="center",
+            ),
             rx.box(),
         ),
         rx.color_mode.button(),

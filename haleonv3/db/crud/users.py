@@ -82,3 +82,25 @@ def upsert_user_from_claims(session, claims: dict, request_id: str | None = None
     session.commit()
     session.refresh(user)
     return user
+
+
+def update_user_flags(
+    session,
+    user_id: int,
+    is_active: bool,
+    is_validated: bool,
+    is_admin: bool,
+):
+    user = session.get(Users, user_id)
+    if not user:
+        return None
+
+    user.is_active = bool(is_active)
+    user.is_validated = bool(is_validated)
+    user.is_admin = bool(is_admin)
+    user.updated_at = datetime.utcnow()
+
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
