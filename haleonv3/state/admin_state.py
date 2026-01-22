@@ -31,6 +31,7 @@ class AdminState(rx.State):
                     "is_active": bool(u.is_active),
                     "is_validated": bool(u.is_validated),
                     "is_admin": bool(u.is_admin),
+                    "source_domain": int(getattr(u, "source_domain", 0)),
                 }
                 for u in rows
             ]
@@ -72,6 +73,7 @@ class AdminState(rx.State):
             or query in (user.get("given_name") or "").lower()
             or query in (user.get("family_name") or "").lower()
             or query in (user.get("immutable_id") or "").lower()
+            or query in str(user.get("source_domain", "")).lower()
         ]
 
     def _update_user(self, user_id: int, **updates: bool):

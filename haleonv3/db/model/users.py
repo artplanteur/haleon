@@ -13,6 +13,7 @@ class Users(SQLModel, table=True):
     family_name: Optional[str] = Field(default=None)
     country: Optional[str] = Field(default=None)
     session_id: Optional[str] = Field(default=None, index=True)
+    source_domain: int = Field(default=0)
 
     is_active: bool = Field(default=False)
     is_validated: bool = Field(default=False)

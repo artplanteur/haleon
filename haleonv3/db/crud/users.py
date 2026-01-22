@@ -31,11 +31,21 @@ def upsert_user_from_claims(session, claims: dict, request_id: str | None = None
     address = claims.get("address") or {}
     country = address.get("country") or claims.get("country")
 
+    email = claims.get("email")
+    source_domain = 0
+    if isinstance(email, str):
+        email_lower = email.strip().lower()
+        if email_lower.endswith("@domain1.com"):
+            source_domain = 1
+        elif email_lower.endswith("@domain2.com"):
+            source_domain = 0
+
     updates = {
-        "email": claims.get("email"),
+        "email": email,
         "given_name": claims.get("given_name"),
         "family_name": claims.get("family_name"),
         "country": country,
+        "source_domain": source_domain,
         "last_login_at": now,
         "updated_at": now,
     }
@@ -47,6 +57,7 @@ def upsert_user_from_claims(session, claims: dict, request_id: str | None = None
         "country": user.country,
         "last_login_at": user.last_login_at,
         "updated_at": user.updated_at,
+        "source_domain": user.source_domain,
     }
 
     for field, new_val in updates.items():
@@ -60,6 +71,7 @@ def upsert_user_from_claims(session, claims: dict, request_id: str | None = None
         "country": user.country,
         "last_login_at": user.last_login_at,
         "updated_at": user.updated_at,
+        "source_domain": user.source_domain,
     }
 
     log_model_changes(

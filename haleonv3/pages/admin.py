@@ -30,6 +30,7 @@ def admin_page() -> rx.Component:
                                 value=AdminState.sort_value,
                                 on_change=AdminState.set_sort_value,
                                 data=[
+                                        "source_domain",
                                     "email",
                                     "given_name",
                                     "family_name",
@@ -48,6 +49,7 @@ def admin_page() -> rx.Component:
                                 rx.table.header(
                                     rx.table.row(
                                         rx.table.column_header_cell("ID"),
+                                        rx.table.column_header_cell("Origine"),
                                         rx.table.column_header_cell("Email"),
                                         rx.table.column_header_cell("Prénom"),
                                         rx.table.column_header_cell("Nom"),
@@ -61,6 +63,7 @@ def admin_page() -> rx.Component:
                                         AdminState.current_users,
                                         lambda user: rx.table.row(
                                             rx.table.cell(user["id"]),
+                                            rx.table.cell(user["source_domain"]),
                                             rx.table.cell(user["email"]),
                                             rx.table.cell(user["given_name"]),
                                             rx.table.cell(user["family_name"]),
