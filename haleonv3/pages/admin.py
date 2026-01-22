@@ -24,17 +24,89 @@ def admin_page() -> rx.Component:
                                 on_change=AdminState.set_search_query,
                                 width="100%",
                             ),
-                            rx.cond(
-                                AdminState.is_loading,
-                                rx.spinner(size="4"),
-                                rx.data_editor(
-                                    columns=AdminState.columns,
-                                    data=AdminState.filtered_users,
-                                    on_cell_edited=AdminState.on_cell_edited,
-                                    height="600px",
-                                    width="100%",
-                                ),
+                        rx.hstack(
+                            rx.text("Trier par"),
+                            rx.select(
+                                value=AdminState.sort_value,
+                                on_change=AdminState.set_sort_value,
+                                data=[
+                                    "email",
+                                    "given_name",
+                                    "family_name",
+                                    "immutable_id",
+                                    "id",
+                                ],
+                                width="240px",
                             ),
+                            spacing="3",
+                            width="100%",
+                        ),
+                        rx.cond(
+                            AdminState.is_loading,
+                            rx.spinner(size="4"),
+                            rx.table.root(
+                                rx.table.header(
+                                    rx.table.row(
+                                        rx.table.column_header_cell("ID"),
+                                        rx.table.column_header_cell("Email"),
+                                        rx.table.column_header_cell("Prénom"),
+                                        rx.table.column_header_cell("Nom"),
+                                        rx.table.column_header_cell("Active"),
+                                        rx.table.column_header_cell("Validated"),
+                                        rx.table.column_header_cell("Admin"),
+                                    )
+                                ),
+                                rx.table.body(
+                                    rx.foreach(
+                                        AdminState.current_users,
+                                        lambda user: rx.table.row(
+                                            rx.table.cell(user["id"]),
+                                            rx.table.cell(user["email"]),
+                                            rx.table.cell(user["given_name"]),
+                                            rx.table.cell(user["family_name"]),
+                                            rx.table.cell(
+                                                rx.switch(
+                                                    is_checked=user["is_active"],
+                                                    on_change=lambda v, uid=user["id"]: AdminState.toggle_active(
+                                                        uid, v
+                                                    ),
+                                                    disabled=(
+                                                        (user["email"] == AuthState.email)
+                                                        | (user["immutable_id"] == AuthState.immutable_id)
+                                                    ),
+                                                )
+                                            ),
+                                            rx.table.cell(
+                                                rx.switch(
+                                                    is_checked=user["is_validated"],
+                                                    on_change=lambda v, uid=user["id"]: AdminState.toggle_validated(
+                                                        uid, v
+                                                    ),
+                                                    disabled=(
+                                                        (user["email"] == AuthState.email)
+                                                        | (user["immutable_id"] == AuthState.immutable_id)
+                                                    ),
+                                                )
+                                            ),
+                                            rx.table.cell(
+                                                rx.switch(
+                                                    is_checked=user["is_admin"],
+                                                    on_change=lambda v, uid=user["id"]: AdminState.toggle_admin(
+                                                        uid, v
+                                                    ),
+                                                    disabled=(
+                                                        (user["email"] == AuthState.email)
+                                                        | (user["immutable_id"] == AuthState.immutable_id)
+                                                    ),
+                                                )
+                                            ),
+                                        ),
+                                    )
+                                ),
+                                width="100%",
+                                variant="surface",
+                            ),
+                        ),
                             spacing="4",
                             width="100%",
                         ),
