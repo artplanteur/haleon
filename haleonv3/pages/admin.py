@@ -18,7 +18,7 @@ def admin_page() -> rx.Component:
                         rx.tabs_trigger("Vendors", value="vendors"),
                         rx.tabs_trigger("Roles", value="roles"),
                     ),
-                    rx.tabs_content(
+                    rx.tabs.content(
                         rx.vstack(
                             rx.heading("Admin Users", size="7"),
                             rx.input(
@@ -166,7 +166,7 @@ def admin_page() -> rx.Component:
                         ),
                         value="users",
                     ),
-                    rx.tabs_content(
+                    rx.tabs.content(
                         rx.vstack(
                             rx.heading("Vendors", size="7"),
                             rx.hstack(
@@ -291,7 +291,7 @@ def admin_page() -> rx.Component:
                         ),
                         value="vendors",
                     ),
-                    rx.tabs_content(
+                    rx.tabs.content(
                         rx.vstack(
                             rx.heading("Local Roles", size="7"),
                             rx.hstack(
