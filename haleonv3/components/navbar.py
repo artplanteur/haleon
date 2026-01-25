@@ -23,7 +23,7 @@ def navbar() -> rx.Component:
                     rx.box(),
                 ),
                 rx.cond(
-                    AuthState.can_oob_admin,
+                    AuthState.is_admin | AuthState.admin_apps.contains("oob"),
                     rx.link(rx.button("Admin OOB", size="2"), href="/apps/oob/admin"),
                     rx.box(),
                 ),

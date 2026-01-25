@@ -9,7 +9,7 @@ def admin_oob_page() -> rx.Component:
     return layout(
         rx.container(
             rx.cond(
-                AuthState.can_oob_admin,
+                AuthState.is_admin | AuthState.admin_apps.contains("oob"),
                 rx.vstack(
                     rx.heading("OOB Admin", size="7"),
                     rx.hstack(
