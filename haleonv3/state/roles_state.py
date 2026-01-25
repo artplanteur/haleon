@@ -6,7 +6,7 @@ from sqlmodel import select
 from haleonv3.apps.oob.crud.roles import grant_role
 from haleonv3.db.database import get_session
 from haleonv3.db.model.users import Users
-from haleonv3.db.model.vendor import UserRole
+from haleonv3.db.model.user_role import UserRole
 
 
 class RolesState(rx.State):

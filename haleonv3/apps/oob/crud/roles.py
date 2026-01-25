@@ -2,7 +2,7 @@ from datetime import datetime
 
 from sqlmodel import Session, select
 
-from haleonv3.db.model.vendor import UserRole
+from haleonv3.db.model.user_role import UserRole
 
 
 def grant_role(session: Session, user_id: int, app: str, role: str) -> UserRole:

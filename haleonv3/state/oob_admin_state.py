@@ -5,7 +5,8 @@ from haleonv3.apps.oob.crud.access import grant_vendor_access, revoke_vendor_acc
 from haleonv3.apps.oob.crud.vendors import create_vendor, list_vendors, toggle_vendor_active
 from haleonv3.db.database import get_session
 from haleonv3.db.model.users import Users
-from haleonv3.db.model.vendor import UserVendorAccess, Vendor
+from haleonv3.db.model.vendor import Vendor
+from haleonv3.db.model.vendor_access import UserVendorAccess
 
 
 class OOBAdminState(rx.State):
