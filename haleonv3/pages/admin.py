@@ -19,7 +19,7 @@ def draggable_user(user: dict) -> rx.Component:
             width="100%",
         ),
         type="user",
-        item={"user_id": user["id"]},
+        item=user,
     )
 
 
@@ -54,7 +54,7 @@ def app_drop_card(app_name: str) -> rx.Component:
             width="100%",
         ),
         accept="user",
-        on_drop=lambda item, app=app_name: RolesState.grant_app_admin(app, item["user_id"]),
+        on_drop=lambda item, app=app_name: RolesState.grant_app_admin(app, item["id"]),
     )
 
 
