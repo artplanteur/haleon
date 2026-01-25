@@ -22,6 +22,11 @@ def navbar() -> rx.Component:
                     rx.link(rx.button("Admin", size="2"), href="/admin"),
                     rx.box(),
                 ),
+                rx.cond(
+                    AuthState.can_oob_admin,
+                    rx.link(rx.button("Admin OOB", size="2"), href="/apps/oob/admin"),
+                    rx.box(),
+                ),
                 avatar(),
                 spacing="3",
                 align_items="center",

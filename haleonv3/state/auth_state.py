@@ -4,6 +4,7 @@ from sqlmodel import select
 
 from haleonv3.db.database import get_session
 from haleonv3.db.model.users import Users
+from haleonv3.db.model.vendor import UserRole
 
 
 class AuthState(rx.State):
@@ -18,6 +19,7 @@ class AuthState(rx.State):
     is_active: bool = False
     is_validated: bool = False
     is_admin: bool = False
+    is_oob_admin: bool = False
 
     def load_me(self):
         headers = (self.router_data or {}).get("headers") or {}
@@ -38,6 +40,14 @@ class AuthState(rx.State):
             if not user:
                 return
 
+            oob_admin = session.exec(
+                select(UserRole).where(
+                    UserRole.user_id == user.id,
+                    UserRole.app == "oob",
+                    UserRole.role == "admin",
+                )
+            ).first()
+
         self.immutable_id = user.immutable_id or ""
         self.email = user.email or ""
         self.given_name = user.given_name or ""
@@ -47,6 +57,7 @@ class AuthState(rx.State):
         self.is_active = bool(user.is_active)
         self.is_validated = bool(user.is_validated)
         self.is_admin = bool(user.is_admin)
+        self.is_oob_admin = bool(oob_admin is not None)
 
     def logout(self):
         self.is_authenticated = False
@@ -58,6 +69,7 @@ class AuthState(rx.State):
         self.is_active = False
         self.is_validated = False
         self.is_admin = False
+        self.is_oob_admin = False
 
     @rx.var
     def initials(self) -> str:
@@ -78,3 +90,7 @@ class AuthState(rx.State):
     @rx.var
     def can_admin(self) -> bool:
         return self.can_validated and self.is_admin
+
+    @rx.var
+    def can_oob_admin(self) -> bool:
+        return self.can_admin or self.is_oob_admin

@@ -1,10 +1,16 @@
 import reflex as rx
 from haleonv3.apps.oob.state import OOBState
+from haleonv3.state.auth_state import AuthState
 
 
 def oob_page() -> rx.Component:
     return rx.box(
         rx.vstack(
+            rx.cond(
+                AuthState.can_oob_admin,
+                rx.link(rx.button("Admin OOB", size="2"), href="/apps/oob/admin"),
+                rx.box(),
+            ),
             rx.cond(
                 OOBState.is_loading,
                 rx.vstack(

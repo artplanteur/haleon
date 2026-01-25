@@ -3,6 +3,10 @@ from typing import Generator
 
 from sqlmodel import SQLModel, Session, create_engine
 
+# Ensure models are imported so SQLModel metadata is complete.
+from haleonv3.db.model.users import Users  # noqa: F401
+from haleonv3.db.model.vendor import UserRole, UserVendorAccess, Vendor  # noqa: F401
+
 
 DB_DIR = Path("C:/python/db")
 DB_DIR.mkdir(parents=True, exist_ok=True)
