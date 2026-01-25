@@ -17,10 +17,7 @@ def admin_oob_page() -> rx.Component:
                             placeholder="Utilisateur",
                             value=OOBAdminState.selected_user_id,
                             on_change=OOBAdminState.set_selected_user,
-                            data=[
-                                {"label": u["email"], "value": u["id"]}
-                                for u in OOBAdminState.users
-                            ],
+                            data=OOBAdminState.user_options,
                             width="320px",
                         ),
                         rx.select(

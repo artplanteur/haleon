@@ -135,6 +135,10 @@ class OOBAdminState(rx.State):
         return sorted(portfolios)
 
     @rx.var
+    def user_options(self) -> list[dict]:
+        return [{"label": user["email"], "value": user["id"]} for user in self.users]
+
+    @rx.var
     def filtered_vendors(self) -> list[dict]:
         vendors = self.vendors
         if self.vendor_search:
