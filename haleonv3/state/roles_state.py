@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import json
+import time
+
 import reflex as rx
 from sqlmodel import select
 
@@ -15,6 +18,8 @@ class RolesState(rx.State):
     users: list[dict] = []
     roles: list[dict] = []
     user_search: str = ""
+    selected_user_id: int | None = None
+    selected_app: str = ""
 
     @rx.event(background=True)
     async def load_apps(self):
@@ -78,6 +83,15 @@ class RolesState(rx.State):
     def set_user_search(self, value: str):
         self.user_search = value or ""
 
+    def set_selected_user(self, value: str):
+        try:
+            self.selected_user_id = int(value)
+        except (TypeError, ValueError):
+            self.selected_user_id = None
+
+    def set_selected_app(self, value: str):
+        self.selected_app = value or ""
+
     @rx.var
     def filtered_users(self) -> list[dict]:
         query = (self.user_search or "").strip().lower()
@@ -91,7 +105,38 @@ class RolesState(rx.State):
             or query in (user.get("family_name") or "").lower()
         ]
 
+    @rx.var
+    def user_options(self) -> list[dict]:
+        return [{"label": user["email"], "value": user["id"]} for user in self.users]
+
+    def grant_selected_admin(self):
+        if not self.selected_user_id:
+            return rx.toast.error("Sélectionne un utilisateur.")
+        if not self.selected_app:
+            return rx.toast.error("Sélectionne une application.")
+        return self.grant_app_admin(self.selected_app, self.selected_user_id)
+
     def grant_app_admin(self, app: str, user_id: int):
+        # #region agent log
+        try:
+            with open(r"c:\python\haleonv3\.cursor\debug.log", "a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "H4",
+                            "location": "state/roles_state.py:grant_app_admin",
+                            "message": "grant_app_admin",
+                            "data": {"app": app, "user_id": user_id},
+                            "timestamp": int(time.time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         with next(get_session()) as session:
             try:
                 role = grant_role(session, user_id, app, "admin")
@@ -122,6 +167,26 @@ class RolesState(rx.State):
         return rx.toast.success("Rôle admin accordé.")
 
     def revoke_app_admin(self, app: str, user_id: int):
+        # #region agent log
+        try:
+            with open(r"c:\python\haleonv3\.cursor\debug.log", "a", encoding="utf-8") as f:
+                f.write(
+                    json.dumps(
+                        {
+                            "sessionId": "debug-session",
+                            "runId": "run1",
+                            "hypothesisId": "H5",
+                            "location": "state/roles_state.py:revoke_app_admin",
+                            "message": "revoke_app_admin",
+                            "data": {"app": app, "user_id": user_id},
+                            "timestamp": int(time.time() * 1000),
+                        }
+                    )
+                    + "\n"
+                )
+        except Exception:
+            pass
+        # #endregion
         with next(get_session()) as session:
             role = session.exec(
                 select(UserRole).where(

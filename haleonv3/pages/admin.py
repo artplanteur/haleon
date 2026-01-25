@@ -1,61 +1,10 @@
 import reflex as rx
-import reflex_enterprise as rxe
 
 from haleonv3.components.layout import layout
 from haleonv3.state.admin_state import AdminState
 from haleonv3.state.auth_state import AuthState
 from haleonv3.state.oob_admin_state import OOBAdminState
 from haleonv3.state.roles_state import RolesState
-
-
-@rx.memo
-def draggable_user(user: dict) -> rx.Component:
-    return rxe.dnd.draggable(
-        rx.box(
-            rx.text(user["email"]),
-            padding="0.5rem",
-            border="1px solid #e5e7eb",
-            border_radius="6px",
-            width="100%",
-        ),
-        type="user",
-        item=user,
-    )
-
-
-@rx.memo
-def app_drop_card(app_name: str) -> rx.Component:
-    return rxe.dnd.drop_target(
-        rx.box(
-            rx.heading(app_name, size="4"),
-            rx.foreach(
-                RolesState.roles,
-                lambda role: rx.cond(
-                    role["app"] == app_name,
-                    rx.hstack(
-                        rx.text(role["user_email"]),
-                        rx.button(
-                            "Remove",
-                            size="1",
-                            variant="soft",
-                            on_click=lambda uid=role["user_id"], app=app_name: RolesState.revoke_app_admin(
-                                app, uid
-                            ),
-                        ),
-                        spacing="2",
-                    ),
-                    rx.box(),
-                ),
-            ),
-            padding="0.75rem",
-            border="1px solid #e5e7eb",
-            border_radius="8px",
-            min_height="120px",
-            width="100%",
-        ),
-        accept="user",
-        on_drop=lambda item, app=app_name: RolesState.grant_app_admin(app, item["id"]),
-    )
 
 
 def admin_page() -> rx.Component:
@@ -356,23 +305,62 @@ def admin_page() -> rx.Component:
                                 width="100%",
                             ),
                             rx.hstack(
-                                rx.box(
-                                    rx.foreach(
-                                        RolesState.filtered_users,
-                                        lambda user: draggable_user(user),
-                                    ),
-                                    width="35%",
+                                rx.select(
+                                    placeholder="Utilisateur",
+                                    value=RolesState.selected_user_id,
+                                    on_change=RolesState.set_selected_user,
+                                    data=RolesState.user_options,
+                                    width="320px",
                                 ),
-                                rx.box(
-                                    rx.foreach(
-                                        RolesState.apps,
-                                        lambda app_name: app_drop_card(app_name),
-                                    ),
-                                    width="65%",
+                                rx.select(
+                                    placeholder="Application",
+                                    value=RolesState.selected_app,
+                                    on_change=RolesState.set_selected_app,
+                                    data=RolesState.apps,
+                                    width="240px",
                                 ),
-                                spacing="4",
+                                rx.button(
+                                    "Rendre admin",
+                                    on_click=RolesState.grant_selected_admin,
+                                ),
+                                spacing="3",
                                 width="100%",
-                                align_items="flex-start",
+                            ),
+                            rx.table.root(
+                                rx.table.header(
+                                    rx.table.row(
+                                        rx.table.column_header_cell("App"),
+                                        rx.table.column_header_cell("User"),
+                                        rx.table.column_header_cell("Role"),
+                                        rx.table.column_header_cell("Action"),
+                                    )
+                                ),
+                                rx.table.body(
+                                    rx.foreach(
+                                        RolesState.roles,
+                                        lambda role: rx.table.row(
+                                            rx.table.cell(role["app"]),
+                                            rx.table.cell(role["user_email"]),
+                                            rx.table.cell(role["role"]),
+                                            rx.table.cell(
+                                                rx.button(
+                                                    "Remove",
+                                                    size="1",
+                                                    variant="soft",
+                                                    on_click=lambda uid=role[
+                                                        "user_id"
+                                                    ], app=role[
+                                                        "app"
+                                                    ]: RolesState.revoke_app_admin(
+                                                        app, uid
+                                                    ),
+                                                )
+                                            ),
+                                        ),
+                                    )
+                                ),
+                                width="100%",
+                                variant="surface",
                             ),
                             spacing="4",
                             width="100%",
