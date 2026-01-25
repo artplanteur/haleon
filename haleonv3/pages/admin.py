@@ -159,7 +159,7 @@ def admin_page() -> rx.Component:
                                                     )
                                                 ),
                                                 rx.table.cell(
-                                                    rx.popover.root(
+                                                        rx.popover.root(
                                                         rx.popover.trigger(
                                                             rx.button("Accès", size="1", variant="soft")
                                                         ),
@@ -267,7 +267,7 @@ def admin_page() -> rx.Component:
                             ),
                             rx.cond(
                                 OOBAdminState.is_loading_vendors,
-                                rx.spinner(size="4"),
+                                rx.spinner(size="3"),
                                 rx.table.root(
                                     rx.table.header(
                                         rx.table.row(
