@@ -9,12 +9,17 @@ def oob_page() -> rx.Component:
         rx.vstack(
             rx.hstack(
                 rx.button("Charger les données", on_click=OOBState.load_oob),
+                rx.spacer(),
+                rx.cond(
+                    AuthState.can_moderate_oob,
+                    rx.link(
+                        rx.button("Admin", size="2", variant="soft"),
+                        href="/apps/oob/admin",
+                    ),
+                    rx.box(),
+                ),
                 spacing="3",
-            ),
-            rx.cond(
-                AuthState.can_moderate_oob,
-                rx.link(rx.button("Admin OOB", size="2"), href="/apps/oob/admin"),
-                rx.box(),
+                width="100%",
             ),
             rx.cond(
                 OOBState.is_loading,
