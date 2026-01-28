@@ -3,7 +3,6 @@ import reflex as rx
 from haleonv3.components.layout import layout
 from haleonv3.state.admin_state import AdminState
 from haleonv3.state.auth_state import AuthState
-from haleonv3.apps.oob.state.admin_state import OOBAccessState
 
 
 def admin_page() -> rx.Component:
@@ -20,30 +19,6 @@ def admin_page() -> rx.Component:
                     rx.tabs.content(
                         rx.vstack(
                             rx.heading("Admin Users", size="7"),
-                            # Example: dynamic form for access grant (popover)
-                            # from haleonv3.components.dynamic_form import dynamic_form
-                            # dynamic_form("access", "Donner accès")
-                            #
-                            # Exemple complet (copier/coller) :
-                            #
-                            # from haleonv3.components.dynamic_form import dynamic_form
-                            #
-                            # dynamic_form(
-                            #     "access",
-                            #     "Donner accès",
-                            #     fields=[
-                            #         {"name": "user_id", "label": "User ID", "type": "number", "required": True},
-                            #         {"name": "vendor_id", "label": "Vendor ID", "type": "number", "required": True},
-                            #         {
-                            #             "name": "access_level",
-                            #             "label": "Niveau d'accès",
-                            #             "type": "select",
-                            #             "options": ["none", "read", "write"],
-                            #             "required": True,
-                            #         },
-                            #     ],
-                            #     on_submit=OOBAccessState.set_user_vendor_access,
-                            # )
                             rx.input(
                                 placeholder="Rechercher (email, prénom, nom, immutable_id)...",
                                 value=AdminState.search_query,
@@ -82,7 +57,6 @@ def admin_page() -> rx.Component:
                                             rx.table.column_header_cell("Active"),
                                             rx.table.column_header_cell("Validated"),
                                             rx.table.column_header_cell("Admin"),
-                                            rx.table.column_header_cell("Vendors"),
                                         )
                                     ),
                                     rx.table.body(
@@ -131,51 +105,7 @@ def admin_page() -> rx.Component:
                                                     )
                                                 ),
                                                 rx.table.cell(
-                                                    rx.popover.root(
-                                                        rx.popover.trigger(
-                                                            rx.button("Accès", size="1", variant="soft")
-                                                        ),
-                                                        rx.popover.content(
-                                                            rx.vstack(
-                                                                rx.foreach(
-                                                                    OOBAccessState.vendor_access,
-                                                                    lambda access: rx.cond(
-                                                                        access["user_id"] == user["id"],
-                                                                        rx.hstack(
-                                                                            rx.text(access["vendor_code"]),
-                                                                            rx.select(
-                                                                                value=access["access_level"],
-                                                                                on_change=lambda v, uid=user["id"], vid=access[
-                                                                                    "vendor_id"
-                                                                                ]: OOBAccessState.set_user_vendor_access(
-                                                                                    uid, vid, v
-                                                                                ),
-                                                                                data=["read", "write"],
-                                                                                width="120px",
-                                                                            ),
-                                                                            rx.button(
-                                                                                "Remove",
-                                                                                size="1",
-                                                                                variant="soft",
-                                                                                on_click=lambda uid=user[
-                                                                                    "id"
-                                                                                ], vid=access[
-                                                                                    "vendor_id"
-                                                                                ]: OOBAccessState.remove_user_vendor_access(
-                                                                                    uid, vid
-                                                                                ),
-                                                                            ),
-                                                                            spacing="2",
-                                                                        ),
-                                                                        rx.box(),
-                                                                    ),
-                                                                ),
-                                                                spacing="2",
-                                                                width="320px",
-                                                            ),
-                                                            side="right",
-                                                        ),
-                                                    )
+                                                    rx.box()
                                                 ),
                                             ),
                                         )
@@ -250,7 +180,6 @@ def admin_page() -> rx.Component:
                                             rx.table.column_header_cell("Description"),
                                             rx.table.column_header_cell("Portfolio"),
                                             rx.table.column_header_cell("Active"),
-                                            rx.table.column_header_cell("Users"),
                                         )
                                     ),
                                     rx.table.body(
@@ -269,41 +198,7 @@ def admin_page() -> rx.Component:
                                                     )
                                                 ),
                                                 rx.table.cell(
-                                                    rx.popover.root(
-                                                        rx.popover.trigger(
-                                                            rx.button("Accès", size="1", variant="soft")
-                                                        ),
-                                                        rx.popover.content(
-                                                            rx.vstack(
-                                                                rx.foreach(
-                                                                    OOBAccessState.vendor_access,
-                                                                    lambda access: rx.cond(
-                                                                        access["vendor_id"] == vendor["id"],
-                                                                        rx.hstack(
-                                                                            rx.text(access["user_email"]),
-                                                                            rx.select(
-                                                                                value=access["access_level"],
-                                                                                on_change=lambda v, uid=access[
-                                                                                    "user_id"
-                                                                                ], vid=vendor[
-                                                                                    "id"
-                                                                                ]: OOBAccessState.set_user_vendor_access(
-                                                                                    uid, vid, v
-                                                                                ),
-                                                                                data=["read", "write"],
-                                                                                width="120px",
-                                                                            ),
-                                                                            spacing="2",
-                                                                        ),
-                                                                        rx.box(),
-                                                                    ),
-                                                                ),
-                                                                spacing="2",
-                                                                width="320px",
-                                                            ),
-                                                            side="right",
-                                                        ),
-                                                    )
+                                                    rx.box()
                                                 ),
                                             ),
                                         )
@@ -407,7 +302,6 @@ def admin_page() -> rx.Component:
             on_mount=[
                 AdminState.load_users,
                 AdminState.load_vendors,
-                OOBAccessState.load_access,
                 AdminState.load_roles,
             ],
         )
