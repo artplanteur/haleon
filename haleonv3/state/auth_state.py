@@ -33,7 +33,7 @@ class AuthState(rx.State):
         if not session_id:
             return
 
-        with next(get_session()) as session:
+        with get_session() as session:
             user = session.exec(
                 select(Users).where(Users.session_id == session_id)
             ).first()
@@ -56,6 +56,20 @@ class AuthState(rx.State):
         self.roles = [
             {"app": role.app, "role": role.role} for role in roles
         ]
+
+    def audit_actor(self, source: str, request_id: str | None = None) -> dict:
+        """Build the audit 'actor' dict for session.info['actor'].
+
+        Keep this beginner-friendly: it's just a dict copied from AuthState.
+        """
+        return {
+            "request_id": request_id,
+            "source": source,
+            "identifier": self.immutable_id or None,
+            "is_active": bool(self.is_active),
+            "is_validated": bool(self.is_validated),
+            "is_admin": bool(self.is_admin),
+        }
 
     def logout(self):
         self.is_authenticated = False
@@ -90,6 +104,17 @@ class AuthState(rx.State):
         return self.can_validated and self.is_admin
 
     @rx.var
-    def admin_apps(self) -> list[str]:
+    def role_apps(self) -> list[str]:
         apps = {role["app"] for role in self.roles if role.get("role") == "admin"}
         return sorted(apps)
+
+    @rx.var
+    def moderator_apps(self) -> list[str]:
+        """Apps where the current user is a moderator (per-app role)."""
+        apps = {role["app"] for role in self.roles if role.get("role") == "moderator"}
+        return sorted(apps)
+
+    @rx.var
+    def can_moderate_oob(self) -> bool:
+        """Global admin OR moderator on OOB."""
+        return bool(self.is_admin) or self.moderator_apps.contains("oob")

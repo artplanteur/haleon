@@ -4,7 +4,6 @@ from haleonv3.components.layout import layout
 from haleonv3.state.admin_state import AdminState
 from haleonv3.state.auth_state import AuthState
 from haleonv3.apps.oob.state.access_state import OOBAccessState
-from haleonv3.state.roles_state import RolesState
 
 
 def admin_page() -> rx.Component:
@@ -310,8 +309,8 @@ def admin_page() -> rx.Component:
                             rx.hstack(
                                 rx.input(
                                     placeholder="Rechercher un utilisateur...",
-                                    value=RolesState.user_search,
-                                    on_change=RolesState.set_user_search,
+                                    value=AdminState.user_search,
+                                    on_change=AdminState.set_user_search,
                                     width="320px",
                                 ),
                                 spacing="3",
@@ -320,21 +319,21 @@ def admin_page() -> rx.Component:
                             rx.hstack(
                                 rx.select(
                                     placeholder="Utilisateur",
-                                    value=RolesState.selected_user_id,
-                                    on_change=RolesState.set_selected_user,
-                                    data=RolesState.user_options,
+                                    value=AdminState.selected_user_id,
+                                    on_change=AdminState.set_selected_user,
+                                    data=AdminState.user_options,
                                     width="320px",
                                 ),
                                 rx.select(
                                     placeholder="Application",
-                                    value=RolesState.selected_app,
-                                    on_change=RolesState.set_selected_app,
-                                    data=RolesState.apps,
+                                    value=AdminState.selected_app,
+                                    on_change=AdminState.set_selected_app,
+                                    data=AdminState.apps,
                                     width="240px",
                                 ),
                                 rx.button(
-                                    "Rendre admin",
-                                    on_click=RolesState.grant_selected_admin,
+                                    "Rendre modérateur",
+                                    on_click=AdminState.grant_selected_moderator,
                                 ),
                                 spacing="3",
                                 width="100%",
@@ -350,7 +349,7 @@ def admin_page() -> rx.Component:
                                 ),
                                 rx.table.body(
                                     rx.foreach(
-                                        RolesState.roles,
+                                        AdminState.roles,
                                         lambda role: rx.table.row(
                                             rx.table.cell(role["app"]),
                                             rx.table.cell(role["user_email"]),
@@ -364,7 +363,7 @@ def admin_page() -> rx.Component:
                                                         "user_id"
                                                     ], app=role[
                                                         "app"
-                                                    ]: RolesState.revoke_app_admin(
+                                                    ]: AdminState.revoke_app_moderator(
                                                         app, uid
                                                     ),
                                                 )
@@ -388,9 +387,7 @@ def admin_page() -> rx.Component:
                 AdminState.load_users,
                 AdminState.load_vendors,
                 OOBAccessState.load_access,
-                RolesState.load_apps,
-                RolesState.load_users,
-                RolesState.load_roles,
+                AdminState.load_roles,
             ],
         )
     )

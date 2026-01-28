@@ -9,7 +9,7 @@ def admin_oob_page() -> rx.Component:
     return layout(
         rx.container(
             rx.cond(
-                AuthState.is_admin | AuthState.admin_apps.contains("oob"),
+                AuthState.can_moderate_oob,
                 rx.vstack(
                     rx.heading("OOB Admin", size="7"),
                     rx.hstack(
@@ -24,7 +24,7 @@ def admin_oob_page() -> rx.Component:
                             placeholder="Niveau d'accès",
                             value=OOBAccessState.selected_access_level,
                             on_change=OOBAccessState.set_selected_access_level,
-                            data=["read", "write"],
+                            data=["none", "read", "write"],
                             width="160px",
                         ),
                         rx.select(

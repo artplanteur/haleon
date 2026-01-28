@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlmodel import Session, select
 
 from haleonv3.db.model.vendor import Vendor
-from haleonv3.db.model.user_vendor_access import UserVendorAccess
+from haleonv3.apps.oob.model.user_vendor_access import UserVendorAccess
 
 
 def grant_vendor_access(

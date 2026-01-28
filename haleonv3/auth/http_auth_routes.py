@@ -36,7 +36,7 @@ def auth_callback(request):
 
     init_db()
     request_id = str(uuid.uuid4())
-    with next(get_session()) as session:
+    with get_session() as session:
         # Provide audit context for this request (read by the before_flush listener).
         session.info["actor"] = {
             "request_id": request_id,
@@ -66,7 +66,7 @@ def auth_me(request):
     if not session_id:
         return PlainTextResponse("No session", status_code=401)
 
-    with next(get_session()) as session:
+    with get_session() as session:
         user = session.exec(
             select(Users).where(Users.session_id == session_id)
         ).first()

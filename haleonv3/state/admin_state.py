@@ -3,11 +3,14 @@ from sqlmodel import select
 
 from haleonv3.db.database import get_session
 from haleonv3.db.crud.users import update_user_flags
+from haleonv3.db.crud.user_role import grant_role, revoke_role
 from haleonv3.db.model.users import Users
+from haleonv3.db.model.user_role import UserRole
 from haleonv3.db.crud.vendors import create_vendor, list_vendors, toggle_vendor_active
+from haleonv3.state.auth_state import AuthState
 
 
-class AdminState(rx.State):
+class AdminState(AuthState):
     is_loading: bool = False
     users: list[dict] = []
     search_query: str = ""
@@ -21,12 +24,21 @@ class AdminState(rx.State):
     new_vendor_description: str = ""
     new_vendor_portfolio: str = ""
 
+    # Roles (per app) - merged from RolesState for simplicity
+    is_loading_roles: bool = False
+    # Keep this beginner-simple: list apps manually.
+    apps: list[str] = ["oob"]
+    roles: list[dict] = []
+    user_search: str = ""
+    selected_user_id: int | None = None
+    selected_app: str = ""
+
     @rx.event(background=True)
     async def load_users(self):
         async with self:
             self.is_loading = True
 
-        with next(get_session()) as session:
+        with get_session() as session:
             rows = session.exec(select(Users)).all()
 
         async with self:
@@ -45,6 +57,29 @@ class AdminState(rx.State):
                 for u in rows
             ]
             self.is_loading = False
+
+    @rx.event(background=True)
+    async def load_roles(self):
+        async with self:
+            self.is_loading_roles = True
+
+        with get_session() as session:
+            rows = session.exec(
+                select(UserRole, Users).where(UserRole.user_id == Users.id)
+            ).all()
+
+        async with self:
+            self.roles = [
+                {
+                    "id": role.id,
+                    "app": role.app,
+                    "role": role.role,
+                    "user_id": role.user_id,
+                    "user_email": user.email or "",
+                }
+                for role, user in rows
+            ]
+            self.is_loading_roles = False
 
     def set_search_query(self, value: str):
         self.search_query = value or ""
@@ -69,6 +104,85 @@ class AdminState(rx.State):
 
     def set_include_inactive(self, value: bool):
         self.include_inactive = bool(value)
+
+    # --- Roles helpers (same names as old RolesState to keep UI simple) ---
+    def set_user_search(self, value: str):
+        self.user_search = value or ""
+
+    def set_selected_user(self, value: str):
+        try:
+            self.selected_user_id = int(value)
+        except (TypeError, ValueError):
+            self.selected_user_id = None
+
+    def set_selected_app(self, value: str):
+        self.selected_app = value or ""
+
+    @rx.var
+    def user_options(self) -> list[dict]:
+        return [{"label": user["email"], "value": user["id"]} for user in self.users]
+
+    def grant_selected_moderator(self):
+        if not self.selected_user_id:
+            return rx.toast.error("Sélectionne un utilisateur.")
+        if not self.selected_app:
+            return rx.toast.error("Sélectionne une application.")
+        return self.grant_app_moderator(self.selected_app, self.selected_user_id)
+
+    def grant_app_moderator(self, app: str, user_id: int):
+        if not self.can_admin:
+            return rx.toast.error("Access denied: admin only.")
+
+        with get_session() as session:
+            session.info["actor"] = self.audit_actor(source="admin-roles")
+            try:
+                role = grant_role(session, user_id=user_id, app=app, role="moderator")
+                user = session.get(Users, user_id)
+            except Exception:
+                return rx.toast.error("Erreur lors de l'ajout du rôle.")
+
+        if not user:
+            return rx.toast.error("Utilisateur introuvable.")
+
+        exists = any(
+            entry["app"] == app
+            and entry["role"] == "moderator"
+            and entry["user_id"] == user_id
+            for entry in self.roles
+        )
+        if not exists:
+            self.roles = [
+                *self.roles,
+                {
+                    "id": role.id,
+                    "app": app,
+                    "role": "moderator",
+                    "user_id": user_id,
+                    "user_email": user.email or "",
+                },
+            ]
+        return rx.toast.success("Rôle modérateur accordé.")
+
+    def revoke_app_moderator(self, app: str, user_id: int):
+        if not self.can_admin:
+            return rx.toast.error("Access denied: admin only.")
+
+        with get_session() as session:
+            session.info["actor"] = self.audit_actor(source="admin-roles")
+            removed = revoke_role(session, user_id=user_id, app=app, role="moderator")
+            if not removed:
+                return rx.toast.error("Rôle introuvable.")
+
+        self.roles = [
+            entry
+            for entry in self.roles
+            if not (
+                entry["app"] == app
+                and entry["role"] == "moderator"
+                and entry["user_id"] == user_id
+            )
+        ]
+        return rx.toast.success("Rôle modérateur retiré.")
 
     @rx.var
     def filtered_users(self) -> list[dict]:
@@ -108,7 +222,7 @@ class AdminState(rx.State):
         async with self:
             self.is_loading_vendors = True
 
-        with next(get_session()) as session:
+        with get_session() as session:
             vendors = list_vendors(session, include_inactive=True)
 
         async with self:
@@ -146,7 +260,8 @@ class AdminState(rx.State):
         if not code:
             return rx.toast.error("Code vendor requis.")
 
-        with next(get_session()) as session:
+        with get_session() as session:
+            session.info["actor"] = self.audit_actor(source="admin-vendors")
             try:
                 create_vendor(
                     session,
@@ -167,7 +282,8 @@ class AdminState(rx.State):
         ]
 
     def toggle_vendor_active(self, vendor_id: int, is_active: bool):
-        with next(get_session()) as session:
+        with get_session() as session:
+            session.info["actor"] = self.audit_actor(source="admin-vendors")
             updated = toggle_vendor_active(session, vendor_id, is_active)
         if not updated:
             return rx.toast.error("Vendor introuvable.")
@@ -190,7 +306,8 @@ class AdminState(rx.State):
         }
         next_values.update({k: bool(v) for k, v in updates.items()})
 
-        with next(get_session()) as session:
+        with get_session() as session:
+            session.info["actor"] = self.audit_actor(source="admin-users")
             updated = update_user_flags(
                 session=session,
                 user_id=user_id,

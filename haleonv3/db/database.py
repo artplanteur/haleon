@@ -1,4 +1,5 @@
 from pathlib import Path
+from contextlib import contextmanager
 from typing import Generator
 
 from sqlmodel import SQLModel, Session, create_engine
@@ -8,7 +9,8 @@ from haleonv3.db.model.logs import Logs  # noqa: F401
 from haleonv3.db.model.user_role import UserRole  # noqa: F401
 from haleonv3.db.model.users import Users  # noqa: F401
 from haleonv3.db.model.vendor import Vendor  # noqa: F401
-from haleonv3.db.model.user_vendor_access import UserVendorAccess  # noqa: F401
+# OOB-only table (still created by init_db for simplicity).
+from haleonv3.apps.oob.model.user_vendor_access import UserVendorAccess  # noqa: F401
 
 # Register ORM listeners (side-effect import).
 from haleonv3.db import audit_listeners  # noqa: F401
@@ -32,7 +34,13 @@ def init_db() -> None:
     SQLModel.metadata.create_all(engine)
 
 
+@contextmanager
 def get_session() -> Generator[Session, None, None]:
-    """Yield a database session."""
+    """Provide a database session (context manager).
+
+    Usage:
+        with get_session() as session:
+            ...
+    """
     with Session(engine) as session:
         yield session
