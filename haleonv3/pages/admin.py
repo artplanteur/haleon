@@ -21,6 +21,9 @@ def admin_page() -> rx.Component:
                     rx.tabs.content(
                         rx.vstack(
                             rx.heading("Admin Users", size="7"),
+                            # Example: dynamic form for access grant (popover)
+                            # from haleonv3.components.dynamic_form import dynamic_form
+                            # dynamic_form("access", "Donner accès")
                             rx.input(
                                 placeholder="Rechercher (email, prénom, nom, immutable_id)...",
                                 value=AdminState.search_query,
@@ -169,6 +172,9 @@ def admin_page() -> rx.Component:
                     rx.tabs.content(
                         rx.vstack(
                             rx.heading("Vendors", size="7"),
+                            # Example: use dynamic form instead of inline inputs
+                            # from haleonv3.components.dynamic_form import dynamic_form
+                            # dynamic_form("vendor", "Ajouter Vendor")
                             rx.hstack(
                                 rx.input(
                                     placeholder="Code vendor",
@@ -294,6 +300,13 @@ def admin_page() -> rx.Component:
                     rx.tabs.content(
                         rx.vstack(
                             rx.heading("Local Roles", size="7"),
+                            # Example: dynamic form for local role assignment
+                            # FORM_SCHEMAS["role"] = [
+                            #     {"name": "user_id", "label": "User ID", "type": "number", "required": True},
+                            #     {"name": "app", "label": "App", "type": "text", "required": True},
+                            #     {"name": "role", "label": "Role", "type": "select", "options": ["admin"]},
+                            # ]
+                            # dynamic_form("role", "Rendre admin")
                             rx.hstack(
                                 rx.input(
                                     placeholder="Rechercher un utilisateur...",
