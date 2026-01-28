@@ -23,6 +23,27 @@ def admin_page() -> rx.Component:
                             # Example: dynamic form for access grant (popover)
                             # from haleonv3.components.dynamic_form import dynamic_form
                             # dynamic_form("access", "Donner accès")
+                            #
+                            # Exemple complet (copier/coller) :
+                            #
+                            # from haleonv3.components.dynamic_form import dynamic_form
+                            #
+                            # dynamic_form(
+                            #     "access",
+                            #     "Donner accès",
+                            #     fields=[
+                            #         {"name": "user_id", "label": "User ID", "type": "number", "required": True},
+                            #         {"name": "vendor_id", "label": "Vendor ID", "type": "number", "required": True},
+                            #         {
+                            #             "name": "access_level",
+                            #             "label": "Niveau d'accès",
+                            #             "type": "select",
+                            #             "options": ["none", "read", "write"],
+                            #             "required": True,
+                            #         },
+                            #     ],
+                            #     on_submit=OOBAccessState.set_user_vendor_access,
+                            # )
                             rx.input(
                                 placeholder="Rechercher (email, prénom, nom, immutable_id)...",
                                 value=AdminState.search_query,
