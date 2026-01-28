@@ -2,7 +2,7 @@ import reflex as rx
 from sqlmodel import select
 
 from haleonv3.apps.oob.crud.access import grant_vendor_access, revoke_vendor_access
-from haleonv3.apps.oob.crud.vendors import list_vendors
+from haleonv3.db.crud.vendors import list_vendors
 from haleonv3.db.database import get_session
 from haleonv3.db.model.users import Users
 from haleonv3.db.model.vendor import Vendor

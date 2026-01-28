@@ -4,7 +4,7 @@ from sqlmodel import select
 from haleonv3.db.database import get_session
 from haleonv3.db.crud.users import update_user_flags
 from haleonv3.db.model.users import Users
-from haleonv3.apps.oob.crud.vendors import create_vendor, list_vendors, toggle_vendor_active
+from haleonv3.db.crud.vendors import create_vendor, list_vendors, toggle_vendor_active
 
 
 class AdminState(rx.State):
