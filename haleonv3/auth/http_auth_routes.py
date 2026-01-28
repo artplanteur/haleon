@@ -37,10 +37,17 @@ def auth_callback(request):
     init_db()
     request_id = str(uuid.uuid4())
     with next(get_session()) as session:
+        # Provide audit context for this request (read by the before_flush listener).
+        session.info["actor"] = {
+            "request_id": request_id,
+            "source": "sso-login",
+            "identifier": claims.get("immutable_id"),
+        }
         user = upsert_user_from_claims(session, claims, request_id=request_id)
         session_id = str(uuid.uuid4())
         user.session_id = session_id
         session.add(user)
+        session.flush()
         session.commit()
 
     response = RedirectResponse("http://localhost:3000/")

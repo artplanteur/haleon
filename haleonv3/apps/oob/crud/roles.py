@@ -23,6 +23,7 @@ def grant_role(session: Session, user_id: int, app: str, role: str) -> UserRole:
         updated_at=datetime.utcnow(),
     )
     session.add(role_entry)
+    session.flush()
     session.commit()
     session.refresh(role_entry)
     return role_entry
@@ -39,6 +40,7 @@ def revoke_role(session: Session, user_id: int, app: str, role: str) -> bool:
     if not existing:
         return False
     session.delete(existing)
+    session.flush()
     session.commit()
     return True
 

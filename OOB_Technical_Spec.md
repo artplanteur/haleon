@@ -135,12 +135,13 @@ Deux cas possibles:
 
 ### 5.1. Tables
 
-À compléter (si Cas B):
-- `oob_vendor_access`
-  - but: lier `immutable_id` à `vendor_id` avec un rôle `read/write`
-  - champs: `id`, `immutable_id`, `vendor_id`, `role`, `created_at`, `updated_at`
-  - contraintes: unicité (`immutable_id`, `vendor_id`)
-  - index: `immutable_id`, `vendor_id`
+État actuel du code: les droits vendor sont stockés dans le socle (niveau 1) via:
+- `user_vendor_access` (table `user_vendor_access`)
+  - lien: `users.id` ↔ `vendor.id`
+  - champ: `access_level` ∈ {`read`, `write`}
+  - contrainte: unicité (`user_id`, `vendor_id`)
+
+Donc, pour l’implémentation actuelle, on se comporte comme un **Cas B**, mais en réutilisant une table commune (socle) plutôt qu’une table “oob_*”.
 
 ### 5.2. Données de référence (si besoin)
 
@@ -182,7 +183,9 @@ Convention proposée:
 
 À compléter (proposition):
 - `oob_update_po(immutable_id, vendor_id, po_id, patch, ...)`
-- (optionnel) `oob_admin_set_vendor_access(immutable_id, target_immutable_id, vendor_id, role, ...)` (si Cas B)
+- Admin vendor access (implémentation actuelle via DB):
+  - `grant_vendor_access(session, user_id, vendor_id, access_level)`
+  - `revoke_vendor_access(session, user_id, vendor_id)`
 
 ### 7.3. Contrôles & erreurs
 

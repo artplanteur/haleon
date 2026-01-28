@@ -21,6 +21,7 @@ def create_vendor(
         updated_at=datetime.utcnow(),
     )
     session.add(vendor)
+    session.flush()
     session.commit()
     session.refresh(vendor)
     return vendor
@@ -49,6 +50,7 @@ def toggle_vendor_active(session: Session, vendor_id: int, is_active: bool) -> V
     vendor.is_active = bool(is_active)
     vendor.updated_at = datetime.utcnow()
     session.add(vendor)
+    session.flush()
     session.commit()
     session.refresh(vendor)
     return vendor

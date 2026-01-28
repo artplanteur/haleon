@@ -6,6 +6,7 @@ from sqlmodel import Field, SQLModel
 
 
 class UserRole(SQLModel, table=True):
+    __tablename__ = "user_role"
     __table_args__ = (UniqueConstraint("user_id", "app", "role"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)

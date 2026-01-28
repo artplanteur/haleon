@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlmodel import Session, select
 
 from haleonv3.db.model.vendor import Vendor
-from haleonv3.db.model.vendor_access import UserVendorAccess
+from haleonv3.db.model.user_vendor_access import UserVendorAccess
 
 
 def grant_vendor_access(
@@ -30,6 +30,7 @@ def grant_vendor_access(
             updated_at=datetime.utcnow(),
         )
     session.add(access)
+    session.flush()
     session.commit()
     session.refresh(access)
     return access
@@ -45,6 +46,7 @@ def revoke_vendor_access(session: Session, user_id: int, vendor_id: int) -> bool
     if not access:
         return False
     session.delete(access)
+    session.flush()
     session.commit()
     return True
 

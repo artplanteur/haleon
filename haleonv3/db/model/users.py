@@ -5,6 +5,7 @@ from sqlmodel import Field, SQLModel
 
 
 class Users(SQLModel, table=True):
+    __tablename__ = "users"
     id: Optional[int] = Field(default=None, primary_key=True)
     immutable_id: str = Field(max_length=20, index=True, unique=True)
 

@@ -1,10 +1,22 @@
 from datetime import datetime
 from typing import Optional
 
+from sqlalchemy import Index
 from sqlmodel import Field, SQLModel
 
 
 class Logs(SQLModel, table=True):
+    # Make the table name explicit (easier for beginners + avoids surprises).
+    __tablename__ = "logs"
+
+    # Helpful indexes for typical audit queries.
+    __table_args__ = (
+        Index("ix_logs_changed_at", "changed_at"),
+        Index("ix_logs_table_record_changed_at", "table_name", "record_pk", "changed_at"),
+        Index("ix_logs_request_id", "request_id"),
+        Index("ix_logs_actor_identifier", "actor_identifier"),
+    )
+
     id: Optional[int] = Field(default=None, primary_key=True)
     changed_at: datetime = Field(default_factory=datetime.utcnow)
 

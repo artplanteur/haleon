@@ -6,6 +6,7 @@ from sqlmodel import Field, SQLModel
 
 
 class UserVendorAccess(SQLModel, table=True):
+    __tablename__ = "user_vendor_access"
     __table_args__ = (UniqueConstraint("user_id", "vendor_id"),)
 
     id: Optional[int] = Field(default=None, primary_key=True)

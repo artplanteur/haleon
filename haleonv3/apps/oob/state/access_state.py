@@ -6,7 +6,7 @@ from haleonv3.db.crud.vendors import list_vendors
 from haleonv3.db.database import get_session
 from haleonv3.db.model.users import Users
 from haleonv3.db.model.vendor import Vendor
-from haleonv3.db.model.vendor_access import UserVendorAccess
+from haleonv3.db.model.user_vendor_access import UserVendorAccess
 
 
 class OOBAccessState(rx.State):

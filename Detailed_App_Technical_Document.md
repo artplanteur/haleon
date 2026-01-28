@@ -36,9 +36,9 @@ Logiciel d’entreprise composé de deux niveaux:
 - **Niveau 1 (socle)**:
   - Connexion via SSO.
   - Gestion des permissions utilisateur en cascade (**active → validated → admin**).
-  - Affichage dynamique des applications (modules) dans la barre de navigation.
+  - Affichage des modules (apps) dans la barre de navigation (actuellement déclarés dans le code).
   - Fonctionnalités utilisateur: thème jour/nuit, langue.
-  - Fonctionnalités admin global: gestion utilisateurs, gestion applications, gestion droits modules, overview (KPI + audit).
+  - Fonctionnalités admin global: gestion utilisateurs, vendors, rôles (par app), overview (KPI + audit).
 
 - **Niveau 2 (modules / apps)**:
   - Une infinité de modules ajoutables.
@@ -66,11 +66,12 @@ Logiciel d’entreprise composé de deux niveaux:
 
 ## 3. Architecture applicative (niveau 1 / niveau 2)
 
-### 3.1. Principes
+### 3.1. Principes (état actuel du code)
 
 - Application web “single page” pilotée par Reflex.
 - Un layout commun encapsule toutes les pages (navigation, contenu, footer).
-- Les modules sont chargés/affichés dynamiquement via un identifiant `app_code` et la configuration stockée en base (table `applications`).
+- Les pages/modules sont aujourd’hui **déclarés dans le code** (voir `haleonv3/haleonv3.py`) et les droits sont stockés en base via `user_role`.
+- La table `applications` décrite plus bas était une **intention** de la spec initiale, mais **n’est pas implémentée** dans le code actuel.
 
 ### 3.2. Séparation des responsabilités
 
@@ -80,16 +81,16 @@ Logiciel d’entreprise composé de deux niveaux:
 
 ---
 
-## 4. Arborescence cible (structure du projet)
+## 4. Arborescence (structure du projet)
 
 Objectif: partir d’un **modèle existant** (`C:\python\haleonv2\haleon`) et définir une arborescence **claire, stable, professionnelle**, avec un rôle précis pour chaque dossier/fichier.
 
 > Règle: ce document (niveau 1) décrit **uniquement** le socle.  
 > Les détails d’un module (ex: OOB) sont décrits dans son document dédié.
 
-### 4.1. Arborescence cible (Haleon niveau 1) — à implémenter dans ce projet
+### 4.1. Arborescence actuelle (référence)
 
-> À ce stade, on définit la structure cible. On la remplira dossier/fichier au fur et à mesure du développement.
+> Cette section a été mise à jour pour refléter le code réel dans `c:\python\haleonv3`.
 
 - **Racine projet**
   - `rxconfig.py` (configuration Reflex) — À compléter
@@ -97,45 +98,41 @@ Objectif: partir d’un **modèle existant** (`C:\python\haleonv2\haleon`) et d�
   - `assets/` (thème, images) — À compléter
   - `locale/` (traductions JSON) — À compléter
 
-- **`haleon/` (package)**
+- **`haleonv3/` (package)**
   - `__init__.py`
-  - `haleon.py` (point d’entrée app)
+  - `haleonv3.py` (point d’entrée app / pages)
   - `auth/` (niveau 1)
     - `__init__.py`
-    - `sso.py` (existant, non spécifié ici)
-    - `auth_state.py` (spécification dans section 5/6)
-    - `permissions.py`
+    - `sso.py`
+    - `http_auth_routes.py` (routes `/auth/login`, `/auth/callback`, `/auth/me`)
   - `state/` (niveau 1)
     - `__init__.py`
-    - `i18n_state.py`
+    - `auth_state.py` (profil + droits globaux)
+    - `admin_state.py` (admin users/vendors)
+    - `roles_state.py` (admin rôles)
   - `components/` (niveau 1)
     - `__init__.py`
     - `layout.py`
     - `navbar.py`
-    - `sidebar.py`
     - `footer.py`
     - `avatar.py`
   - `pages/` (niveau 1)
-    - `index.py`
-    - `home.py`
-    - `app_view.py`
-    - `admin/`
-      - `users.py`
-      - `applications.py`
-      - `overview.py`
+    - `admin.py`
   - `db/` (niveau 1)
     - `__init__.py`
     - `database.py`
+    - `audit_listeners.py` (audit DB auto via events SQLAlchemy)
     - `model/`
       - `users.py`
-      - `applications.py`
+      - `vendor.py`
+      - `user_role.py`
+      - `user_vendor_access.py`
       - `logs.py`
     - `crud/`
       - `users.py`
-      - `applications.py`
-      - `logs.py`
+      - `vendors.py`
   - `apps/` (niveau 2)
-    - `<app_code>/...` (hors périmètre de ce document)
+    - `oob/` (module OOB: pages/state/crud/schema)
 
 ---
 
@@ -204,33 +201,38 @@ Règles:
 - `admin` (niveau 1): admin global du socle
 
 Important (frontière niveau 1 / niveau 2):
-- Le socle définit uniquement **qui voit/ouvre un module** (via `validated` et la liste `applications`).
+- Le socle définit uniquement **qui voit/ouvre un module** (via `validated`, `is_admin`, et les rôles en base `user_role`).
 - Les **autorisations internes** d’un module (ex: read/write/admin, accès par vendor, etc.) sont définies **dans le document du module** (ex: `OOB_Technical_Spec.md`) et implémentées **dans le module**.
 
 ---
 
-## 7. Base de données (niveau 1) — tables, contraintes, index
+## 7. Base de données (niveau 1) — tables, contraintes, index (état actuel du code)
 
-Décision: niveau 1 = **3 tables** uniquement:
+Décision (implémentation actuelle): niveau 1 = **5 tables**:
 - `users`
-- `applications`
+- `vendor`
+- `user_role`
+- `user_vendor_access`
 - `logs` (audit)
 
 ### 7.1. Table `users`
 
 **But**: stocker l’utilisateur SSO et son niveau d’accès (niveau 1).
 
-**Champs (cible) — avec types**:
+**Champs (implémentés) — avec types**:
 - `id`: `int` (PK, auto)
 - `immutable_id`: `str` (NOT NULL, UNIQUE, longueur max 20)
-- `first_name`: `str | None` (nullable)
+- `email`: `str | None` (nullable)
+- `given_name`: `str | None` (nullable)
 - `family_name`: `str | None` (nullable)
 - `country`: `str | None` (nullable)
+- `session_id`: `str | None` (nullable, indexé)
+- `source_domain`: `int` (NOT NULL, default 0)
 - `is_active`: `bool` (NOT NULL, default `False`, devient `True` à la 1ère connexion SSO)
 - `is_validated`: `bool` (NOT NULL, default `False`)
 - `is_admin`: `bool` (NOT NULL, default `False`)
 - `created_at`: `datetime` (NOT NULL, default “now”)
-- `updated_at`: `datetime` (NOT NULL, default “now”, mis à jour à chaque update)
+- `updated_at`: `datetime` (NOT NULL, default “now”, mis à jour par le code lors des updates)
 - `last_login_at`: `datetime | None` (nullable)
 
 **Contraintes**:
@@ -241,32 +243,51 @@ Décision: niveau 1 = **3 tables** uniquement:
 
 **Index recommandés**:
 - `immutable_id`
-- `last_login_at`
+- `session_id`
+- (optionnel) `last_login_at`
 
-### 7.2. Table `applications`
+### 7.2. Table `vendor`
 
-**But**: déclarer les modules disponibles.
+**But**: référentiel vendors (utilisé notamment par OOB).
 
-**Champs (cible) — avec types**:
+**Champs (implémentés)**:
 - `id`: `int` (PK, auto)
-- `code`: `str` (NOT NULL, UNIQUE) — identifiant stable du module (ex: `oob`)
-- `name`: `str` (NOT NULL)
-- `description`: `str | None` (nullable)
-- `icon`: `str | None` (nullable)
-- `route`: `str | None` (nullable)
-- `is_active`: `bool` (NOT NULL, default `True`)
-- `minimum_requirement`: `str` (NOT NULL) ∈ {`active`, `validated`, `admin`}
-- `created_at`: `datetime` (NOT NULL, default “now”)
-- `updated_at`: `datetime` (NOT NULL, default “now”, mis à jour à chaque update)
+- `code`: `str` (NOT NULL, UNIQUE, indexé, max 10)
+- `description`: `str | None`
+- `portfolio`: `str | None` (indexé)
+- `is_active`: `bool` (default `True`)
+- `created_at`: `datetime`
+- `updated_at`: `datetime`
+
+### 7.3. Table `user_role`
+
+**But**: droits “par application” (ex: admin sur `oob`).
+
+**Champs (implémentés)**:
+- `id`: `int` (PK)
+- `user_id`: `int` (FK `users.id`, indexé)
+- `app`: `str` (indexé)
+- `role`: `str` (indexé)
+- `created_at`, `updated_at`
 
 **Contraintes**:
-- unicité sur `code`
+- unicité (`user_id`, `app`, `role`)
 
-**Index recommandés**:
-- `code`
-- `is_active`
+### 7.4. Table `user_vendor_access`
 
-### 7.3. Table `logs` (audit — une seule table)
+**But**: droits “par vendor” (read/write) utilisés par l’admin OOB.
+
+**Champs (implémentés)**:
+- `id`: `int` (PK)
+- `user_id`: `int` (FK `users.id`, indexé)
+- `vendor_id`: `int` (FK `vendor.id`, indexé)
+- `access_level`: `str` (ex: `read`, `write`)
+- `created_at`, `updated_at`
+
+**Contraintes**:
+- unicité (`user_id`, `vendor_id`)
+
+### 7.5. Table `logs` (audit — une seule table)
 
 **But**: tracer toutes les opérations DB: INSERT/UPDATE/DELETE (qui/quand/table/champ/old/new).
 
@@ -279,7 +300,7 @@ Décision: niveau 1 = **3 tables** uniquement:
 - `actor_is_active`: `bool | None` (nullable)
 - `actor_is_validated`: `bool | None` (nullable)
 - `actor_is_admin`: `bool | None` (nullable)
-- `source`: `str | None` (nullable) — ex: `admin-users`, `admin-applications`, `overview`
+- `source`: `str | None` (nullable) — ex: `sso-login`, `admin-users`, `admin-roles`, `module-oob:access-admin`
 - `operation`: `str` (NOT NULL) ∈ {`INSERT`, `UPDATE`, `DELETE`}
 - `table_name`: `str` (NOT NULL)
 - `record_pk`: `str` (NOT NULL)
@@ -288,9 +309,10 @@ Décision: niveau 1 = **3 tables** uniquement:
 - `new_value`: `str | None` (nullable) — texte (JSON sérialisé recommandé)
 
 **Index recommandés**:
-- `(table_name, record_pk)`
 - `changed_at`
+- `(table_name, record_pk, changed_at)`
 - `actor_user_id`
+- `actor_identifier`
 - `request_id`
 
 **Rétention**:
@@ -307,8 +329,19 @@ On doit choisir une stratégie d’audit.
 
 ### 8.2. Stratégie retenue (MVP)
 
-Décision MVP: **audit au niveau application** (via CRUD centralisé).  
-Règle: **toute écriture DB** (insert/update/delete) doit passer par le CRUD correspondant.
+Décision MVP (implémentée): **audit automatique via events SQLAlchemy**.
+
+- Fichier: `haleonv3/db/audit_listeners.py`
+- Events:
+  - `before_flush`: log DELETE + log UPDATE (1 ligne par champ)
+  - `after_flush`: log INSERT (1 ligne par champ, PK disponible après flush)
+- Contexte acteur: le code métier peut renseigner `session.info["actor"]` (dict) pour remplir:
+  - `request_id`, `source`
+  - `actor_user_id`, `actor_identifier`
+  - `actor_is_active`, `actor_is_validated`, `actor_is_admin`
+
+Règle simple pour débutant:
+- si tu veux “qui a fait quoi”, mets `session.info["actor"] = {...}` **avant** d’appeler un CRUD qui écrit (commit/flush).
 
 ### 8.3. Règles de log
 
@@ -393,55 +426,26 @@ Règle: **toute écriture DB** (insert/update/delete) doit passer par le CRUD co
   - si `admin=True` alors forcer `is_validated=True` et `is_active=True`
 - **Audit**: UPDATE (1 ligne par champ modifié)
 
-### 9.2. CRUD `applications`
+### 9.2. CRUD `vendors`
 
-#### 9.2.1. `applications_create(...)`
+Fonctions implémentées (voir `haleonv3/db/crud/vendors.py`):
+- `create_vendor(session, code, description, portfolio, is_active=True)`
+- `list_vendors(session, portfolio=None, code=None, include_inactive=True)`
+- `toggle_vendor_active(session, vendor_id, is_active)`
 
-- **But**: créer une application (module) dans `applications`.
-- **Entrées**:
-  - `code: str`
-  - `name: str`
-  - `minimum_requirement: str` ∈ {`active`, `validated`, `admin`}
-  - `description: str | None`
-  - `icon: str | None`
-  - `route: str | None`
-  - `is_active: bool` (default `True`)
-  - `actor_user_id: int`
-  - `request_id: str | None`
-  - `source: str` (ex: `admin-applications`)
-- **Sorties**: `application` créé
-- **Erreurs**:
-  - `code` déjà existant
-- **Audit**: INSERT (1 ligne par champ ou 1 ligne globale — À valider; recommandé 1/champ)
+### 9.3. CRUD `roles` (niveau 2 / admin)
 
-#### 9.2.2. `applications_update(...)`
+Fonctions implémentées (voir `haleonv3/apps/oob/crud/roles.py`):
+- `grant_role(session, user_id, app, role)`
+- `revoke_role(session, user_id, app, role)`
 
-- **But**: modifier une application (admin).
-- **Entrées**:
-  - `application_id: int`
-  - champs modifiables: `name`, `description`, `icon`, `route`, `is_active`, `minimum_requirement`
-  - `actor_user_id: int`
-  - `request_id: str | None`
-  - `source: str` (ex: `admin-applications`)
-- **Sorties**: `application` mis à jour
-- **Audit**: UPDATE (1 ligne par champ modifié)
+### 9.4. CRUD `vendor access` (niveau 2 / admin)
 
-#### 9.2.3. `applications_list(...)`
+Fonctions implémentées (voir `haleonv3/apps/oob/crud/access.py`):
+- `grant_vendor_access(session, user_id, vendor_id, access_level)`
+- `revoke_vendor_access(session, user_id, vendor_id)`
 
-- **But**: lister les applications.
-- **Entrées**:
-  - `only_active: bool` (default `False`)
-  - `minimum_requirement: str | None`
-  - `limit: int` / `offset: int`
-- **Sorties**: `list[applications]` + `total_count` (recommandé)
-
-#### 9.2.4. `applications_get_by_code(...)`
-
-- **But**: récupérer une application par `code`.
-- **Entrées**: `code: str`
-- **Sorties**: `application | None`
-
-### 9.3. CRUD `logs` (lecture)
+### 9.5. CRUD `logs` (lecture) — à implémenter si besoin
 
 #### 9.3.1. `logs_list_recent(...)`
 
@@ -489,7 +493,7 @@ Règle: **toute écriture DB** (insert/update/delete) doit passer par le CRUD co
 
 - **Sidebar admin**:
   - visible uniquement si `is_admin=True`
-  - liens: utilisateurs, applications, overview
+  - liens (implémentés): users, vendors, roles, accès OOB
 
 ### 10.2. Écrans admin (cible)
 
@@ -498,8 +502,11 @@ Règle: **toute écriture DB** (insert/update/delete) doit passer par le CRUD co
   - actions: valider / retirer validation, passer admin / retirer admin
   - afficher dernière connexion
 
-- **Applications**
-  - CRUD applications (code, name, minimum_requirement, actif/inactif)
+- **Vendors**
+  - CRUD vendors (code, description, portfolio, actif/inactif)
+
+- **Roles**
+  - gestion des rôles (ex: admin par app)
 
 - **Overview**
   - KPI: nb users, nb apps, volume logs
@@ -525,8 +532,10 @@ Règle: **toute écriture DB** (insert/update/delete) doit passer par le CRUD co
 
 - **Admin / Utilisateurs**
   - But: valider un utilisateur, le passer admin, visualiser la dernière connexion.
-- **Admin / Applications**
-  - But: gérer la table `applications`.
+- **Admin / Vendors**
+  - But: gérer la table `vendor`.
+- **Admin / Roles**
+  - But: gérer `user_role` (ex: admin par app).
 - **Admin / Overview**
   - But: KPI + visualisation/filtrage des logs.
 
