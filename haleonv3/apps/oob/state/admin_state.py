@@ -1,7 +1,10 @@
 import reflex as rx
 from sqlmodel import select
 
-from haleonv3.apps.oob.crud.access import grant_vendor_access, revoke_vendor_access
+from haleonv3.apps.oob.crud.user_vendor_access import (
+    grant_vendor_access,
+    revoke_vendor_access,
+)
 from haleonv3.db.crud.vendors import list_vendors
 from haleonv3.db.database import get_session
 from haleonv3.db.model.users import Users
@@ -130,7 +133,11 @@ class OOBAccessState(AuthState):
         with get_session() as session:
             try:
                 session.info["actor"] = self.audit_actor(source="module-oob:access-admin")
-                access = grant_vendor_access(session, user_id, vendor_id, access_level)
+                if access_level == "none":
+                    revoke_vendor_access(session, user_id, vendor_id)
+                    access = None
+                else:
+                    access = grant_vendor_access(session, user_id, vendor_id, access_level)
                 vendor = session.get(Vendor, vendor_id)
                 user = session.get(Users, user_id)
             except Exception:
@@ -138,6 +145,14 @@ class OOBAccessState(AuthState):
 
         if not vendor or not user:
             return rx.toast.error("Données introuvables.")
+
+        if access_level == "none":
+            self.vendor_access = [
+                entry
+                for entry in self.vendor_access
+                if not (entry["user_id"] == user_id and entry["vendor_id"] == vendor_id)
+            ]
+            return rx.toast.success("Accès supprimé.")
 
         updated = False
         updated_list = []
@@ -150,7 +165,7 @@ class OOBAccessState(AuthState):
         if not updated:
             updated_list.append(
                 {
-                    "id": access.id,
+                    "id": access.id if access else None,
                     "user_id": user_id,
                     "user_email": user.email or "",
                     "vendor_id": vendor_id,
@@ -200,12 +215,15 @@ class OOBAccessState(AuthState):
         with get_session() as session:
             session.info["actor"] = self.audit_actor(source="module-oob:access-admin")
             for vendor_id in self.selected_vendor_ids:
-                grant_vendor_access(
-                    session,
-                    self.selected_user_id,
-                    int(vendor_id),
-                    self.selected_access_level,
-                )
+                if self.selected_access_level == "none":
+                    revoke_vendor_access(session, self.selected_user_id, int(vendor_id))
+                else:
+                    grant_vendor_access(
+                        session,
+                        self.selected_user_id,
+                        int(vendor_id),
+                        self.selected_access_level,
+                    )
 
         return [
             rx.toast.success("Accès appliqué."),

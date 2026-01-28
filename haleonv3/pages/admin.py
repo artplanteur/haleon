@@ -3,7 +3,7 @@ import reflex as rx
 from haleonv3.components.layout import layout
 from haleonv3.state.admin_state import AdminState
 from haleonv3.state.auth_state import AuthState
-from haleonv3.apps.oob.state.access_state import OOBAccessState
+from haleonv3.apps.oob.state.admin_state import OOBAccessState
 
 
 def admin_page() -> rx.Component:
