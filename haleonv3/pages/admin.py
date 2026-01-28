@@ -3,7 +3,7 @@ import reflex as rx
 from haleonv3.components.layout import layout
 from haleonv3.state.admin_state import AdminState
 from haleonv3.state.auth_state import AuthState
-from haleonv3.state.oob_admin_state import OOBAdminState
+from haleonv3.apps.oob.state.access_state import OOBAccessState
 from haleonv3.state.roles_state import RolesState
 
 
@@ -111,14 +111,14 @@ def admin_page() -> rx.Component:
                                                     )
                                                 ),
                                                 rx.table.cell(
-                                                        rx.popover.root(
+                                                    rx.popover.root(
                                                         rx.popover.trigger(
                                                             rx.button("Accès", size="1", variant="soft")
                                                         ),
                                                         rx.popover.content(
                                                             rx.vstack(
                                                                 rx.foreach(
-                                                                    OOBAdminState.vendor_access,
+                                                                    OOBAccessState.vendor_access,
                                                                     lambda access: rx.cond(
                                                                         access["user_id"] == user["id"],
                                                                         rx.hstack(
@@ -127,7 +127,7 @@ def admin_page() -> rx.Component:
                                                                                 value=access["access_level"],
                                                                                 on_change=lambda v, uid=user["id"], vid=access[
                                                                                     "vendor_id"
-                                                                                ]: OOBAdminState.set_user_vendor_access(
+                                                                                ]: OOBAccessState.set_user_vendor_access(
                                                                                     uid, vid, v
                                                                                 ),
                                                                                 data=["read", "write"],
@@ -141,7 +141,7 @@ def admin_page() -> rx.Component:
                                                                                     "id"
                                                                                 ], vid=access[
                                                                                     "vendor_id"
-                                                                                ]: OOBAdminState.remove_user_vendor_access(
+                                                                                ]: OOBAccessState.remove_user_vendor_access(
                                                                                     uid, vid
                                                                                 ),
                                                                             ),
@@ -178,50 +178,50 @@ def admin_page() -> rx.Component:
                             rx.hstack(
                                 rx.input(
                                     placeholder="Code vendor",
-                                    value=OOBAdminState.new_vendor_code,
-                                    on_change=OOBAdminState.set_new_vendor_code,
+                                    value=AdminState.new_vendor_code,
+                                    on_change=AdminState.set_new_vendor_code,
                                     width="160px",
                                 ),
                                 rx.input(
                                     placeholder="Description",
-                                    value=OOBAdminState.new_vendor_description,
-                                    on_change=OOBAdminState.set_new_vendor_description,
+                                    value=AdminState.new_vendor_description,
+                                    on_change=AdminState.set_new_vendor_description,
                                     width="280px",
                                 ),
                                 rx.input(
                                     placeholder="Portfolio",
-                                    value=OOBAdminState.new_vendor_portfolio,
-                                    on_change=OOBAdminState.set_new_vendor_portfolio,
+                                    value=AdminState.new_vendor_portfolio,
+                                    on_change=AdminState.set_new_vendor_portfolio,
                                     width="160px",
                                 ),
-                                rx.button("Ajouter", on_click=OOBAdminState.create_vendor),
+                                rx.button("Ajouter", on_click=AdminState.create_vendor),
                                 spacing="3",
                                 width="100%",
                             ),
                             rx.hstack(
                                 rx.input(
                                     placeholder="Filtrer par code",
-                                    value=OOBAdminState.vendor_search,
-                                    on_change=OOBAdminState.set_vendor_search,
+                                    value=AdminState.vendor_search,
+                                    on_change=AdminState.set_vendor_search,
                                     width="200px",
                                 ),
                                 rx.select(
                                     placeholder="Portfolio",
-                                    value=OOBAdminState.portfolio_filter,
-                                    on_change=OOBAdminState.set_portfolio_filter,
-                                    data=OOBAdminState.portfolios,
+                                    value=AdminState.portfolio_filter,
+                                    on_change=AdminState.set_portfolio_filter,
+                                    data=AdminState.portfolios,
                                     width="200px",
                                 ),
                                 rx.switch(
-                                    is_checked=OOBAdminState.include_inactive,
-                                    on_change=OOBAdminState.set_include_inactive,
+                                    is_checked=AdminState.include_inactive,
+                                    on_change=AdminState.set_include_inactive,
                                 ),
                                 rx.text("Inclure inactifs"),
                                 spacing="3",
                                 width="100%",
                             ),
                             rx.cond(
-                                OOBAdminState.is_loading_vendors,
+                                AdminState.is_loading_vendors,
                                 rx.spinner(size="3"),
                                 rx.table.root(
                                     rx.table.header(
@@ -235,7 +235,7 @@ def admin_page() -> rx.Component:
                                     ),
                                     rx.table.body(
                                         rx.foreach(
-                                            OOBAdminState.filtered_vendors,
+                                            AdminState.filtered_vendors,
                                             lambda vendor: rx.table.row(
                                                 rx.table.cell(vendor["code"]),
                                                 rx.table.cell(vendor["description"]),
@@ -243,7 +243,7 @@ def admin_page() -> rx.Component:
                                                 rx.table.cell(
                                                     rx.switch(
                                                         is_checked=vendor["is_active"],
-                                                        on_change=lambda v, vid=vendor["id"]: OOBAdminState.toggle_vendor_active(
+                                                        on_change=lambda v, vid=vendor["id"]: AdminState.toggle_vendor_active(
                                                             vid, v
                                                         ),
                                                     )
@@ -256,7 +256,7 @@ def admin_page() -> rx.Component:
                                                         rx.popover.content(
                                                             rx.vstack(
                                                                 rx.foreach(
-                                                                    OOBAdminState.vendor_access,
+                                                                    OOBAccessState.vendor_access,
                                                                     lambda access: rx.cond(
                                                                         access["vendor_id"] == vendor["id"],
                                                                         rx.hstack(
@@ -267,7 +267,7 @@ def admin_page() -> rx.Component:
                                                                                     "user_id"
                                                                                 ], vid=vendor[
                                                                                     "id"
-                                                                                ]: OOBAdminState.set_user_vendor_access(
+                                                                                ]: OOBAccessState.set_user_vendor_access(
                                                                                     uid, vid, v
                                                                                 ),
                                                                                 data=["read", "write"],
@@ -386,8 +386,8 @@ def admin_page() -> rx.Component:
             ),
             on_mount=[
                 AdminState.load_users,
-                OOBAdminState.load_vendors,
-                OOBAdminState.load_access,
+                AdminState.load_vendors,
+                OOBAccessState.load_access,
                 RolesState.load_apps,
                 RolesState.load_users,
                 RolesState.load_roles,

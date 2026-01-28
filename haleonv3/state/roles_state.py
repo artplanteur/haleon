@@ -10,9 +10,10 @@ from haleonv3.apps.oob.crud.roles import grant_role
 from haleonv3.db.database import get_session
 from haleonv3.db.model.users import Users
 from haleonv3.db.model.user_role import UserRole
+from haleonv3.state.auth_state import AuthState
 
 
-class RolesState(rx.State):
+class RolesState(AuthState):
     is_loading: bool = False
     apps: list[str] = []
     users: list[dict] = []
@@ -165,6 +166,17 @@ class RolesState(rx.State):
                 },
             ]
         return rx.toast.success("Rôle admin accordé.")
+
+    @rx.var
+    def is_global_admin(self) -> bool:
+        return self.can_admin
+
+    def is_app_admin(self, app: str) -> bool:
+        if self.is_global_admin:
+            return True
+        return any(
+            entry["app"] == app and entry["role"] == "admin" for entry in self.roles
+        )
 
     def revoke_app_admin(self, app: str, user_id: int):
         # #region agent log

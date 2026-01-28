@@ -2,34 +2,46 @@ import reflex as rx
 from sqlmodel import select
 
 from haleonv3.apps.oob.crud.access import grant_vendor_access, revoke_vendor_access
-from haleonv3.apps.oob.crud.vendors import create_vendor, list_vendors, toggle_vendor_active
+from haleonv3.apps.oob.crud.vendors import list_vendors
 from haleonv3.db.database import get_session
 from haleonv3.db.model.users import Users
 from haleonv3.db.model.vendor import Vendor
 from haleonv3.db.model.vendor_access import UserVendorAccess
 
 
-class OOBAdminState(rx.State):
-    is_loading_vendors: bool = False
+class OOBAccessState(rx.State):
     is_loading_access: bool = False
     is_loading_users: bool = False
+    is_loading_vendors: bool = False
 
-    vendors: list[dict] = []
     vendor_access: list[dict] = []
     users: list[dict] = []
-
-    vendor_search: str = ""
-    portfolio_filter: str = ""
-    include_inactive: bool = True
-
-    new_vendor_code: str = ""
-    new_vendor_description: str = ""
-    new_vendor_portfolio: str = ""
+    vendors: list[dict] = []
 
     selected_user_id: int | None = None
     selected_access_level: str = "read"
     selected_vendor_ids: list[int] = []
     selected_portfolio: str = ""
+
+    @rx.event(background=True)
+    async def load_users(self):
+        async with self:
+            self.is_loading_users = True
+
+        with next(get_session()) as session:
+            users = session.exec(select(Users)).all()
+
+        async with self:
+            self.users = [
+                {
+                    "id": user.id,
+                    "email": user.email or "",
+                    "given_name": user.given_name or "",
+                    "family_name": user.family_name or "",
+                }
+                for user in users
+            ]
+            self.is_loading_users = False
 
     @rx.event(background=True)
     async def load_vendors(self):
@@ -51,26 +63,6 @@ class OOBAdminState(rx.State):
                 for vendor in vendors
             ]
             self.is_loading_vendors = False
-
-    @rx.event(background=True)
-    async def load_users(self):
-        async with self:
-            self.is_loading_users = True
-
-        with next(get_session()) as session:
-            users = session.exec(select(Users)).all()
-
-        async with self:
-            self.users = [
-                {
-                    "id": user.id,
-                    "email": user.email or "",
-                    "given_name": user.given_name or "",
-                    "family_name": user.family_name or "",
-                }
-                for user in users
-            ]
-            self.is_loading_users = False
 
     @rx.event(background=True)
     async def load_access(self):
@@ -99,24 +91,6 @@ class OOBAdminState(rx.State):
             ]
             self.is_loading_access = False
 
-    def set_vendor_search(self, value: str):
-        self.vendor_search = value or ""
-
-    def set_new_vendor_code(self, value: str):
-        self.new_vendor_code = value or ""
-
-    def set_new_vendor_description(self, value: str):
-        self.new_vendor_description = value or ""
-
-    def set_new_vendor_portfolio(self, value: str):
-        self.new_vendor_portfolio = value or ""
-
-    def set_portfolio_filter(self, value: str):
-        self.portfolio_filter = value or ""
-
-    def set_include_inactive(self, value: bool):
-        self.include_inactive = bool(value)
-
     def set_selected_user(self, value: str):
         try:
             self.selected_user_id = int(value)
@@ -139,18 +113,6 @@ class OOBAdminState(rx.State):
         return [{"label": user["email"], "value": user["id"]} for user in self.users]
 
     @rx.var
-    def filtered_vendors(self) -> list[dict]:
-        vendors = self.vendors
-        if self.vendor_search:
-            search = self.vendor_search.lower()
-            vendors = [v for v in vendors if search in v["code"].lower()]
-        if self.portfolio_filter:
-            vendors = [v for v in vendors if v["portfolio"] == self.portfolio_filter]
-        if not self.include_inactive:
-            vendors = [v for v in vendors if v["is_active"]]
-        return vendors
-
-    @rx.var
     def portfolio_vendors(self) -> list[dict]:
         if not self.selected_portfolio:
             return self.vendors
@@ -162,43 +124,6 @@ class OOBAdminState(rx.State):
             return False
         portfolio_ids = {vendor["id"] for vendor in self.portfolio_vendors}
         return portfolio_ids.issubset(set(self.selected_vendor_ids))
-
-    def create_vendor(self):
-        code = (self.new_vendor_code or "").strip()
-        if not code:
-            return rx.toast.error("Code vendor requis.")
-
-        with next(get_session()) as session:
-            try:
-                create_vendor(
-                    session,
-                    code=code,
-                    description=(self.new_vendor_description or "").strip() or None,
-                    portfolio=(self.new_vendor_portfolio or "").strip() or None,
-                    is_active=True,
-                )
-            except Exception:
-                return rx.toast.error("Erreur lors de la création du vendor.")
-
-        self.new_vendor_code = ""
-        self.new_vendor_description = ""
-        self.new_vendor_portfolio = ""
-        return [
-            rx.toast.success("Vendor ajouté."),
-            OOBAdminState.load_vendors,
-        ]
-
-    def toggle_vendor_active(self, vendor_id: int, is_active: bool):
-        with next(get_session()) as session:
-            updated = toggle_vendor_active(session, vendor_id, is_active)
-        if not updated:
-            return rx.toast.error("Vendor introuvable.")
-
-        self.vendors = [
-            {**vendor, "is_active": bool(is_active)} if vendor["id"] == vendor_id else vendor
-            for vendor in self.vendors
-        ]
-        return rx.toast.success("Vendor mis à jour.")
 
     def set_user_vendor_access(self, user_id: int, vendor_id: int, access_level: str):
         with next(get_session()) as session:
@@ -216,12 +141,7 @@ class OOBAdminState(rx.State):
         updated_list = []
         for entry in self.vendor_access:
             if entry["user_id"] == user_id and entry["vendor_id"] == vendor_id:
-                updated_list.append(
-                    {
-                        **entry,
-                        "access_level": access_level,
-                    }
-                )
+                updated_list.append({**entry, "access_level": access_level})
                 updated = True
             else:
                 updated_list.append(entry)
@@ -285,7 +205,7 @@ class OOBAdminState(rx.State):
 
         return [
             rx.toast.success("Accès appliqué."),
-            OOBAdminState.load_access,
+            OOBAccessState.load_access,
         ]
 
     def remove_access_from_selected(self):
@@ -300,5 +220,5 @@ class OOBAdminState(rx.State):
 
         return [
             rx.toast.success("Accès supprimés."),
-            OOBAdminState.load_access,
+            OOBAccessState.load_access,
         ]

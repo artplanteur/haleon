@@ -1,5 +1,6 @@
 import reflex as rx
-from haleonv3.apps.oob.state import OOBState
+
+from haleonv3.apps.oob.state.oob_state import OOBState
 from haleonv3.state.auth_state import AuthState
 
 
