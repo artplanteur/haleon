@@ -25,7 +25,8 @@ class OOBState(AuthState):
 
         Rules (simple):
         - if global admin OR OOB moderator => access to all vendors (write)
-        - else => only vendors present in user_vendor_access (read/write), absence => none
+        - else => all vendors are at least (read), and vendors present in user_vendor_access
+          with access_level="write" are upgraded to (write)
         """
         async with self:
             self.is_loading_vendors = True
@@ -58,25 +59,38 @@ class OOBState(AuthState):
                     for v in vendors
                 ]
             else:
-                rows = session.exec(
-                    select(UserVendorAccess, Vendor)
-                    .join(Vendor, Vendor.id == UserVendorAccess.vendor_id)
-                    .where(UserVendorAccess.user_id == user.id)
-                ).all()
-                allowed = [
-                    {
+                vendors = list(session.exec(select(Vendor)).all())
+                # Default: everyone can read all vendors.
+                vendor_map = {
+                    int(v.id): {
                         "vendor_id": v.id,
                         "vendor_code": v.code,
                         "portfolio": v.portfolio or "",
-                        "access_level": access.access_level,
+                        "access_level": "read",
                     }
-                    for access, v in rows
-                ]
+                    for v in vendors
+                }
+
+                # Upgrade to write where configured.
+                access_rows = session.exec(
+                    select(UserVendorAccess).where(UserVendorAccess.user_id == user.id)
+                ).all()
+                for access in access_rows:
+                    if access.access_level == "write" and access.vendor_id in vendor_map:
+                        vendor_map[int(access.vendor_id)]["access_level"] = "write"
+
+                allowed = list(vendor_map.values())
 
         async with self:
             self.allowed_vendors = allowed
             self.allowed_vendor_ids = [int(row["vendor_id"]) for row in allowed if row.get("vendor_id") is not None]
             self.is_loading_vendors = False
+
+    @rx.event(background=True)
+    async def load_oob(self):
+        """One button: load vendors, then load data."""
+        await self.load_allowed_vendors()
+        await self.load_oob_data()
 
     @staticmethod
     def _fake_api_dataframe(total_rows: int = 800) -> pd.DataFrame:

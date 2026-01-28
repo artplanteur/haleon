@@ -7,6 +7,10 @@ from haleonv3.state.auth_state import AuthState
 def oob_page() -> rx.Component:
     return rx.box(
         rx.vstack(
+            rx.hstack(
+                rx.button("Charger les données", on_click=OOBState.load_oob),
+                spacing="3",
+            ),
             rx.cond(
                 AuthState.can_moderate_oob,
                 rx.link(rx.button("Admin OOB", size="2"), href="/apps/oob/admin"),
@@ -41,6 +45,5 @@ def oob_page() -> rx.Component:
             spacing="4",
             width="100%",
         ),
-        on_mount=[OOBState.load_allowed_vendors, OOBState.load_oob_data],
         width="100%",
     )
