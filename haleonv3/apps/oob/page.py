@@ -41,6 +41,6 @@ def oob_page() -> rx.Component:
             spacing="4",
             width="100%",
         ),
-        on_mount=OOBState.load_oob_data,
+        on_mount=[OOBState.load_allowed_vendors, OOBState.load_oob_data],
         width="100%",
     )

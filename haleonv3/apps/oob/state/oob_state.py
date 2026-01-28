@@ -1,12 +1,82 @@
 import asyncio
 import pandas as pd
 import reflex as rx
+from sqlmodel import select
 
+from haleonv3.db.database import get_session
+from haleonv3.db.model.users import Users
+from haleonv3.db.model.vendor import Vendor
+from haleonv3.apps.oob.model.user_vendor_access import UserVendorAccess
+from haleonv3.state.auth_state import AuthState
 
-class OOBState(rx.State):
+class OOBState(AuthState):
     is_loading: bool = False
     progress: int = 0
     rows: list[dict] = []
+
+    # Vendors the current user can access in OOB (used later to load PO/vendor data).
+    is_loading_vendors: bool = False
+    allowed_vendor_ids: list[int] = []
+    allowed_vendors: list[dict] = []
+
+    @rx.event(background=True)
+    async def load_allowed_vendors(self):
+        """Load allowed vendors for the current user.
+
+        Rules (simple):
+        - if global admin OR OOB moderator => access to all vendors (write)
+        - else => only vendors present in user_vendor_access (read/write), absence => none
+        """
+        async with self:
+            self.is_loading_vendors = True
+            self.allowed_vendor_ids = []
+            self.allowed_vendors = []
+
+        immutable_id = (self.immutable_id or "").strip()
+        if not immutable_id:
+            async with self:
+                self.is_loading_vendors = False
+            return
+
+        with get_session() as session:
+            user = session.exec(select(Users).where(Users.immutable_id == immutable_id)).first()
+            if not user:
+                async with self:
+                    self.is_loading_vendors = False
+                return
+
+            # Moderator: all vendors (implicit write).
+            if bool(self.can_moderate_oob):
+                vendors = list(session.exec(select(Vendor)).all())
+                allowed = [
+                    {
+                        "vendor_id": v.id,
+                        "vendor_code": v.code,
+                        "portfolio": v.portfolio or "",
+                        "access_level": "write",
+                    }
+                    for v in vendors
+                ]
+            else:
+                rows = session.exec(
+                    select(UserVendorAccess, Vendor)
+                    .join(Vendor, Vendor.id == UserVendorAccess.vendor_id)
+                    .where(UserVendorAccess.user_id == user.id)
+                ).all()
+                allowed = [
+                    {
+                        "vendor_id": v.id,
+                        "vendor_code": v.code,
+                        "portfolio": v.portfolio or "",
+                        "access_level": access.access_level,
+                    }
+                    for access, v in rows
+                ]
+
+        async with self:
+            self.allowed_vendors = allowed
+            self.allowed_vendor_ids = [int(row["vendor_id"]) for row in allowed if row.get("vendor_id") is not None]
+            self.is_loading_vendors = False
 
     @staticmethod
     def _fake_api_dataframe(total_rows: int = 800) -> pd.DataFrame:
